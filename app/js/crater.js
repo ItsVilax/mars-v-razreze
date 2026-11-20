@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   clamp, formatMeters, formatInt, formatNumber, heightColor,
-  downloadCanvas, downloadText, rad
+  downloadCanvas, downloadText, rad, isMobileLayout
 } from './utils.js';
 import { Chart } from './charts.js';
 
@@ -316,7 +316,7 @@ export class CraterLab {
     const hemi = side === 'north' ? 'северное полушарие' : 'южное полушарие';
 
     const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
+    modal.className = 'modal-backdrop crater-modal';
     modal.innerHTML = `
       <div class="modal-card" role="dialog" aria-modal="true" aria-label="Профиль ${info.name}">
         <div class="modal-head">
@@ -328,7 +328,11 @@ export class CraterLab {
           <button class="modal-close" type="button" aria-label="Закрыть">×</button>
         </div>
         <div class="modal-body">
-          <div class="crater-grid">
+          <div class="mobile-crater-tabs mobile-only" role="tablist" aria-label="Вид кратера">
+            <button type="button" data-crater-view="terrain" class="active">3D-рельеф</button>
+            <button type="button" data-crater-view="profile">Профиль</button>
+          </div>
+          <div class="crater-grid mobile-terrain">
             <div class="terrain-panel">
               <canvas id="crater3d-canvas"></canvas>
               <div class="terrain-hud">
@@ -381,6 +385,16 @@ export class CraterLab {
     modal.querySelector('.modal-close').addEventListener('click', () => this.close());
     modal.addEventListener('click', (e) => { if (e.target === modal) this.close(); });
     document.addEventListener('keydown', this._keyHandler);
+
+    const craterGrid = modal.querySelector('.crater-grid');
+    const viewButtons = [...modal.querySelectorAll('[data-crater-view]')];
+    const setView = (view) => {
+      craterGrid.classList.toggle('mobile-profile', view === 'profile');
+      craterGrid.classList.toggle('mobile-terrain', view !== 'profile');
+      viewButtons.forEach((b) => b.classList.toggle('active', b.dataset.craterView === view));
+      if (view === 'profile') requestAnimationFrame(() => this.chart?.resize?.());
+    };
+    viewButtons.forEach((b) => b.addEventListener('click', () => setView(b.dataset.craterView)));
 
     const canvas = modal.querySelector('#profile-chart');
     this.chart = new Chart(canvas, {
@@ -530,10 +544,11 @@ export class CraterLab {
     const { x, y } = this.chart.pixelFromEvent(e);
     const xl = this.chart.xToPx(s.xMode === 'distance' ? s.profile.distance[s.rims.left] : s.profile.columns[s.rims.left]);
     const xr = this.chart.xToPx(s.xMode === 'distance' ? s.profile.distance[s.rims.right] : s.profile.columns[s.rims.right]);
-    if (Math.abs(x - xl) < 14 && y < this.chart.plotBox().y + 30) {
+    const hit = isMobileLayout() ? 26 : 14;
+    if (Math.abs(x - xl) < hit && y < this.chart.plotBox().y + 34) {
       s.dragging = 'left';
       this.chart.canvas.setPointerCapture?.(e.pointerId);
-    } else if (Math.abs(x - xr) < 14 && y < this.chart.plotBox().y + 30) {
+    } else if (Math.abs(x - xr) < hit && y < this.chart.plotBox().y + 34) {
       s.dragging = 'right';
       this.chart.canvas.setPointerCapture?.(e.pointerId);
     }
@@ -655,7 +670,7 @@ export class CraterLab {
     const north = this.data.craterProfiles.north;
     const south = this.data.craterProfiles.south;
     const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
+    modal.className = 'modal-backdrop compare-modal';
     modal.innerHTML = `
       <div class="modal-card" role="dialog" aria-modal="true" aria-label="Сравнение кратеров">
         <div class="modal-head">

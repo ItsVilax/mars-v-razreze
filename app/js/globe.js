@@ -2,7 +2,7 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   R_MARS_M, clamp, lerp, rad, deg, heightColor, densityColor,
-  latLonToVec3, vec3ToLatLon, bilerpGrid
+  latLonToVec3, vec3ToLatLon, bilerpGrid, isMobileLayout
 } from './utils.js';
 
 const TEX_W = 2880;
@@ -22,17 +22,20 @@ function replaceSphereUV(geometry) {
   uv.needsUpdate = true;
 }
 
-function makeColorTexture(globe8) {
-  const data = new Uint8Array(TEX_W * TEX_H * 4);
+function makeColorTexture(globe8, lowRes = false) {
+  const w = lowRes ? TEX_W / 2 : TEX_W;
+  const h = lowRes ? TEX_H / 2 : TEX_H;
+  const step = lowRes ? 2 : 1;
+  const data = new Uint8Array(w * h * 4);
   let k = 0;
-  for (let r = 0; r < TEX_H; r++) {
-    for (let c = 0; c < TEX_W; c++) {
-      const z = globe8[r * TEX_W + c];
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      const z = globe8[(r * step) * TEX_W + c * step];
       const [rr, gg, bb] = heightColor(z);
       data[k++] = rr; data[k++] = gg; data[k++] = bb; data[k++] = 255;
     }
   }
-  const tex = new THREE.DataTexture(data, TEX_W, TEX_H, THREE.RGBAFormat, THREE.UnsignedByteType);
+  const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -119,6 +122,10 @@ export class MarsGlobe {
     this.pointerDown = null;
     this.lastHover = 0;
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    this.isMobile = isMobileLayout();
+    this.screenActive = true;
+    this.pageVisible = !document.hidden;
+    this._raf = 0;
 
     this._initScene();
     this._buildGlobe();
@@ -133,7 +140,8 @@ export class MarsGlobe {
     this._resize();
     this._last = performance.now();
     this._animate = this._animate.bind(this);
-    requestAnimationFrame(this._animate);
+    document.addEventListener('visibilitychange', () => this.setPageVisible(!document.hidden));
+    this._syncLoop();
   }
 
   _initScene() {
@@ -143,7 +151,7 @@ export class MarsGlobe {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas, antialias: true, alpha: true, powerPreference: 'high-performance'
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -158,7 +166,8 @@ export class MarsGlobe {
     this.controls.maxDistance = 7.2;
     this.controls.rotateSpeed = 0.45;
     this.controls.zoomSpeed = 0.85;
-    this.controls.autoRotate = true;
+    this.autoRotate = !this.isMobile;
+    this.controls.autoRotate = this.autoRotate;
     this.controls.autoRotateSpeed = 0.28;
 
     const amb = new THREE.AmbientLight(0xffffff, 0.72);
@@ -175,7 +184,7 @@ export class MarsGlobe {
   }
 
   _buildGlobe() {
-    const geo = new THREE.SphereGeometry(1, 720, 360);
+    const geo = new THREE.SphereGeometry(1, this.isMobile ? 480 : 720, this.isMobile ? 240 : 360);
     replaceSphereUV(geo);
     const pos = geo.attributes.position;
     const count = pos.count;
@@ -191,7 +200,7 @@ export class MarsGlobe {
     this.geometry = geo;
     this._applyHeight(this.exaggeration);
 
-    this.colorTexture = makeColorTexture(data.globe8);
+    this.colorTexture = makeColorTexture(data.globe8, this.isMobile);
     this.densityTexture = makeDensityTexture(new Float64Array(72 * 36), 1, data.globe8, 5);
     this.baseMaterial = new THREE.MeshStandardMaterial({
       map: this.colorTexture,
@@ -335,7 +344,7 @@ export class MarsGlobe {
       el.addEventListener('click', (e) => { e.stopPropagation(); this.onMarker?.(def.id); });
       this.labelsEl.appendChild(el);
 
-      this.markers.push({ ...def, group, dot, ring, hit, el, visible: true });
+      this.markers.push({ ...def, group, dot, ring, hit, el, visible: true, contextVisible: true });
     }
     this._updateMarkerPositions();
     this.pickables.push(...this.markerHitMeshes);
@@ -447,7 +456,7 @@ export class MarsGlobe {
   }
 
   _buildStars() {
-    const n = 1800;
+    const n = this.isMobile ? 900 : 1800;
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       const u = Math.random();
@@ -543,8 +552,49 @@ export class MarsGlobe {
     this.renderer.setSize(w, h, false);
   }
 
+  _syncLoop() {
+    const shouldRun = this.screenActive && this.pageVisible;
+    if (shouldRun && !this._raf) {
+      this._last = performance.now();
+      this._raf = requestAnimationFrame(this._animate);
+    } else if (!shouldRun && this._raf) {
+      cancelAnimationFrame(this._raf);
+      this._raf = 0;
+    }
+  }
+
+  setScreenActive(on) {
+    this.screenActive = !!on;
+    this._syncLoop();
+  }
+
+  setPageVisible(on) {
+    this.pageVisible = !!on;
+    this._syncLoop();
+  }
+
+  setLabelContext(tab) {
+    if (!this.isMobile) {
+      for (const m of this.markers) m.contextVisible = true;
+      return;
+    }
+    const map = {
+      globe: new Set(['stokes', 'horowitz', 'utopia', 'hellas']),
+      ocean: new Set(['utopia', 'hellas']),
+      shore: new Set(['shoreA', 'shoreB']),
+    };
+    const allowed = map[tab] || null;
+    for (const m of this.markers) {
+      m.contextVisible = !allowed || allowed.has(m.id);
+    }
+  }
+
   _animate(now) {
-    requestAnimationFrame(this._animate);
+    if (!this.screenActive || !this.pageVisible) {
+      this._raf = 0;
+      return;
+    }
+    this._raf = requestAnimationFrame(this._animate);
     const dt = Math.min(0.05, (now - (this._last || now)) / 1000);
     this._last = now;
     if (this.flight) {
@@ -578,7 +628,7 @@ export class MarsGlobe {
       const sy = (-v.y * 0.5 + 0.5) * rect.height;
       // Do not let a label slide under the stage buttons / coordinates HUD.
       const safe = !(sy < 72 && sx > rect.width - 185) && !(sy < 92 && sx < 225);
-      const visible = front && inView && safe;
+      const visible = front && inView && safe && m.contextVisible !== false;
       m.el.classList.toggle('visible', visible);
       if (visible) {
         m.el.style.left = `${sx}px`;

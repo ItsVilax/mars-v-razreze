@@ -71,6 +71,7 @@ export class OceanModule {
       this.globe.flyTo(45, 115, 1.95);
     });
     this.controls.expand.addEventListener('click', () => this.openChartModal());
+    document.getElementById('mobile-ocean-chart')?.addEventListener('click', () => this.openChartModal());
   }
 
   _initWorker() {
@@ -387,7 +388,7 @@ export class OceanModule {
 
   openChartModal() {
     const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
+    modal.className = 'modal-backdrop ocean-chart-modal';
     modal.innerHTML = `
       <div class="modal-card" role="dialog" aria-modal="true" aria-label="График уровень — площадь">
         <div class="modal-head">

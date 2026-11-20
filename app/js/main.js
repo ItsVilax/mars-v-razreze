@@ -4,8 +4,9 @@ import { CraterLab } from './crater.js';
 import { CatalogModule } from './catalog.js';
 import { OceanModule } from './ocean.js';
 import { ShoreModule } from './shore.js';
+import { MobileUI } from './mobile.js';
 import {
-  formatInt, formatNumber, formatMeters, fmtLat, fmtLon, rafThrottle, esc
+  formatInt, formatNumber, formatMeters, fmtLat, fmtLon, rafThrottle, esc, isMobileLayout
 } from './utils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -80,6 +81,7 @@ function setTab(name) {
     // Keep the density view in sync with the current filter.
     state.catalog?._update?.();
   }
+  window.dispatchEvent(new CustomEvent('mars-tab', { detail: { tab: name } }));
 }
 
 function updateHover(pos) {
@@ -119,6 +121,7 @@ function setLegendDensity(on) {
 }
 
 function buildDefense() {
+  const isPhone = () => isMobileLayout();
   const steps = [
     {
       tag: '01 · глобус',
@@ -132,14 +135,22 @@ function buildDefense() {
       title: 'Stokes: глубина 2083 м',
       text: 'Строка 96 северного фрагмента 128 px/°. Края вала −3163 и −3691 м, дно −5510 м. Отрицательные высоты: −4000 м выше, чем −5000 м. d = 2083 м, d/(1000D) = 0.0333.',
       metrics: [['d', '2083 м'], ['d / (1000D)', '0.0333'], ['Дно', '−5510 м']],
-      apply: () => { setTab('craters'); state.globe?.flyTo(55.621, 171.287, 1.85); state.craterLab?.open('north'); },
+      apply: () => {
+        setTab('craters');
+        state.globe?.flyTo(55.621, 171.287, 1.85);
+        if (!isPhone()) state.craterLab?.open('north');
+      },
     },
     {
       tag: '03 · сравнение',
       title: 'Horowitz: 2478 м',
       text: 'Южный фрагмент, строка 97: края 2025 и 1761 м, дно −585 м. d = 2478 м, d/(1000D) = 0.0393. На одном масштабе видно абсолютный сдвиг около 5.5 км между полушариями.',
       metrics: [['d', '2478 м'], ['d / (1000D)', '0.0393'], ['Сдвиг', '≈ 5.5 км']],
-      apply: () => { setTab('craters'); state.globe?.flyTo(-32.063, 140.760, 1.85); state.craterLab?.open('south'); },
+      apply: () => {
+        setTab('craters');
+        state.globe?.flyTo(-32.063, 140.760, 1.85);
+        if (!isPhone()) state.craterLab?.open('south');
+      },
     },
     {
       tag: '04 · каталог',
@@ -171,7 +182,7 @@ function buildDefense() {
         state.craterLab?.close();
         setTab('shore');
         state.catalog?.setDensity(false);
-        state.shore?.focus('A');
+        if (!isPhone()) state.shore?.focus('A');
       },
     },
     {
@@ -360,10 +371,13 @@ async function boot() {
     state.ocean = new OceanModule({ data, globe: state.globe, modalRoot: $('modal-root'), onToast: toast });
     state.shore = new ShoreModule({ data, globe: state.globe, modalRoot: $('modal-root') });
 
+    state.mobile = new MobileUI({ getState: () => state, setTab, toast });
+    state.mobile.init();
+
     // expose for verification / debugging in the browser only
     window.__mars = {
       data, globe: state.globe, craterLab: state.craterLab, catalog: state.catalog,
-      ocean: state.ocean, shore: state.shore, setTab,
+      ocean: state.ocean, shore: state.shore, mobile: state.mobile, setTab,
       get state() { return { tab: state.tab, level: state.ocean?.level, mode: state.ocean?.mode }; },
     };
 
@@ -398,10 +412,10 @@ function handleMarker(id) {
     state.globe.flyTo(-42, 70, 1.95);
   } else if (id === 'shoreA') {
     setTab('shore');
-    state.shore.focus('A');
+    if (!isMobileLayout()) state.shore.focus('A');
   } else if (id === 'shoreB') {
     setTab('shore');
-    state.shore.focus('B');
+    if (!isMobileLayout()) state.shore.focus('B');
   }
 }
 
@@ -444,13 +458,13 @@ function bindUi() {
   $('layer-points')?.addEventListener('change', (e) => state.globe.setPointsVisible(e.target.checked));
   $('layer-water')?.addEventListener('change', (e) => state.globe.setWaterVisible(e.target.checked));
   const water = $('layer-water');
-  if (water) water.checked = true;
+  if (water) water.checked = !!state.globe?.waterUserVisible;
 
   $('view-reset')?.addEventListener('click', () => { state.globe.setAutoRotate(false); state.globe.flyTo(8, 10, 3.25); });
   $('view-north')?.addEventListener('click', () => { state.globe.setAutoRotate(false); state.globe.flyTo(86, 0, 3.2); });
   $('view-south')?.addEventListener('click', () => { state.globe.setAutoRotate(false); state.globe.flyTo(-86, 0, 3.2); });
   const rotate = $('view-rotate');
-  rotate?.classList.toggle('active', true);
+  rotate?.classList.toggle('active', !!state.globe?.autoRotate);
   rotate?.addEventListener('click', () => {
     const on = !state.globe.autoRotate;
     state.globe.setAutoRotate(on);

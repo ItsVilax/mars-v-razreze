@@ -2,12 +2,13 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#070b12">
   <title>Марс в разрезе — интерактивный 3D-атлас</title>
   <meta name="description" content="Интерактивный 3D-атлас Марса: MOLA, профили кратеров, каталог, заливка северного бассейна и проверка берега Deuteronilus.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23c75b32'/%3E%3Cpath d='M12 28c8-6 14 4 22 0s14-6 20 0' stroke='%23ffb38a' stroke-width='4' fill='none'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="app/css/style.css">
+  <link rel="stylesheet" href="app/css/mobile.css">
   <script type="importmap">
     {
       "imports": {
@@ -42,16 +43,18 @@
         <div class="brand-mark" aria-hidden="true"><span></span></div>
         <div>
           <h1>Марс в разрезе</h1>
-          <p>интерактивный 3D-атлас · MOLA / MGS</p>
+          <p id="brand-sub">интерактивный 3D-атлас · MOLA / MGS</p>
         </div>
       </div>
       <div class="top-actions">
         <div class="data-chip" title="Исходная сетка MOLA 16 пикселей на градус">
           <span class="dot"></span> MOLA 16 px/°
         </div>
-        <button class="btn btn-ghost" id="btn-help" type="button">Методика</button>
-        <button class="btn btn-accent" id="btn-defense" type="button">
-          <span class="play-icon" aria-hidden="true">▶</span> Режим защиты
+        <button class="btn btn-ghost" id="btn-help" type="button" aria-label="Методика и источники">
+          <span class="help-icon" aria-hidden="true">?</span><span class="btn-label">Методика</span>
+        </button>
+        <button class="btn btn-accent" id="btn-defense" type="button" aria-label="Режим защиты">
+          <span class="play-icon" aria-hidden="true">▶</span><span class="btn-label">Режим защиты</span>
         </button>
       </div>
     </header>
@@ -59,12 +62,35 @@
     <main class="layout">
       <aside class="sidebar">
         <nav class="tabs" id="tabs" aria-label="Разделы атласа">
-          <button type="button" data-tab="globe" class="active"><span>01</span> Глобус</button>
-          <button type="button" data-tab="craters"><span>02</span> Кратеры</button>
-          <button type="button" data-tab="catalog"><span>03</span> Каталог</button>
-          <button type="button" data-tab="ocean"><span>04</span> Океан</button>
-          <button type="button" data-tab="shore"><span>05</span> Берег</button>
-          <button type="button" data-tab="geology"><span>06</span> Геология</button>
+          <button type="button" data-tab="globe" class="active">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.3 3.9 5.1 3.9 8.5s-1.3 6.2-3.9 8.5c-2.6-2.3-3.9-5.1-3.9-8.5s1.3-6.2 3.9-8.5Z"/></svg>
+            <span class="tab-num">01</span><span class="tab-label">Глобус</span>
+          </button>
+          <button type="button" data-tab="craters">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.3"/><path d="M8.7 12h6.6M12 8.7v6.6"/></svg>
+            <span class="tab-num">02</span><span class="tab-label">Кратеры</span>
+          </button>
+          <button type="button" data-tab="catalog">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>
+            <span class="tab-num">03</span><span class="tab-label">Каталог</span>
+          </button>
+          <button type="button" data-tab="ocean">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5c2.2 0 2.2 2 4.5 2s2.3-2 4.5-2 2.2 2 4.5 2 2.3-2 4.5-2M3 13c2.2 0 2.2 2 4.5 2s2.3-2 4.5-2 2.2 2 4.5 2 2.3-2 4.5-2M3 17.5c2.2 0 2.2 2 4.5 2s2.3-2 4.5-2 2.2 2 4.5 2 2.3-2 4.5-2"/></svg>
+            <span class="tab-num">04</span><span class="tab-label">Океан</span>
+          </button>
+          <button type="button" data-tab="shore">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.5c3-1 4.5-4.5 7.5-4.5s4.5 3.5 7.5 2.5M3 10.5c2.5-.7 3.6-2.8 6-2.8 2.2 0 3.3 2 5.5 2M8 20h13"/></svg>
+            <span class="tab-num">05</span><span class="tab-label">Берег</span>
+          </button>
+          <button type="button" data-tab="geology">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5 12 4l8 3.5-8 3.5-8-3.5ZM4 12l8 3.5 8-3.5M4 16.5 12 20l8-3.5"/></svg>
+            <span class="tab-num">06</span><span class="tab-label">Геология</span>
+          </button>
+        </nav>
+
+        <nav class="mobile-subtabs mobile-only" id="mobile-ocean-tabs" aria-label="Океан и берег">
+          <button type="button" data-mobile-ocean="ocean" class="active">Заливка</button>
+          <button type="button" data-mobile-ocean="shore">Берег</button>
         </nav>
 
         <div class="sidebar-scroll" id="sidebar-scroll">
@@ -80,6 +106,11 @@
               <button type="button" class="jump" data-focus="hellas">Эллада</button>
               <button type="button" class="jump" data-focus="stokes">Stokes</button>
               <button type="button" class="jump" data-focus="horowitz">Horowitz</button>
+            </div>
+
+            <div class="mobile-globe-actions mobile-only">
+              <button class="mobile-pill" type="button" data-mobile-menu="globe-view">Слои и вид</button>
+              <button class="mobile-pill" type="button" data-mobile-menu="globe-data">О данных</button>
             </div>
 
             <div class="control-card">
@@ -112,10 +143,12 @@
             <div class="eyebrow">Шаг 02 · кратеры</div>
             <h2>Один разрез — два полушария</h2>
             <p class="lead">Профиль идёт через центр кратера с запада на восток. Края вала и дно можно перетаскивать: приложение пересчитает <code>d = (z₁ + z₂)/2 − zmin</code> и <code>d / (1000D)</code>.</p>
+            <div class="mobile-headline mobile-only">Глубина похожа. Уровень — разный.</div>
 
             <div class="crater-list" id="crater-cards"></div>
 
             <button class="btn btn-wide" id="compare-btn" type="button">Сравнить Stokes и Horowitz →</button>
+            <button class="mobile-link mobile-only" type="button" data-mobile-menu="crater-notes">Подробнее о профиле</button>
 
             <div class="note accent-note" id="profile-check">
               <b>Проверка источника</b>
@@ -137,6 +170,7 @@
             <div class="eyebrow">Шаг 03 · каталог</div>
             <h2>Кратеры и площадь</h2>
             <p class="lead">Каталог Robbins &amp; Hynek в снимке PADC: все строки с диаметром ≥ 20 км. Полушарие определяется по широте центра.</p>
+            <div class="mobile-headline mobile-only">Юг плотнее в 2,54 раза.</div>
 
             <div class="segmented" id="catalog-filter" role="group" aria-label="Группа диаметров">
               <button type="button" data-group="all" class="active">все ≥ 20</button>
@@ -169,6 +203,12 @@
             </div>
 
             <label class="switch"><input type="checkbox" id="density-checkbox"><span></span><b>Наложить на глобус</b><em>цвет = плотность</em></label>
+
+            <div class="mobile-action-row mobile-only">
+              <button class="mobile-pill" type="button" id="mobile-catalog-globe">На глобус</button>
+              <button class="mobile-pill" type="button" data-mobile-menu="catalog-table">Таблица</button>
+              <button class="mobile-pill" type="button" data-mobile-menu="catalog-notes">Подробнее</button>
+            </div>
 
             <div class="note">
               <b>Граница вывода</b>
@@ -205,6 +245,11 @@
               <button type="button" data-mode="all">все низкие места</button>
             </div>
 
+            <div class="mobile-ocean-actions mobile-only">
+              <button class="mobile-pill" type="button" id="mobile-ocean-chart">График</button>
+              <button class="mobile-pill" type="button" data-mobile-menu="ocean-notes">Ещё</button>
+            </div>
+
             <div class="mini-actions">
               <button class="btn btn-ghost" type="button" id="ocean-utopia-btn">В Утопию</button>
               <button class="btn btn-ghost" type="button" id="ocean-hellas-btn">К Элладе</button>
@@ -228,6 +273,7 @@
             <div class="eyebrow">Шаг 05 · берег</div>
             <h2>Один уровень на два участка</h2>
             <p class="lead">Два фрагмента линии Deuteronilus версии Ivanov 2017 из архива Sholes 2.0.1. Уровень выбирается только по A и затем переносится на B без подгонки.</p>
+            <div class="mobile-headline mobile-only">B выше A на 386 м на всём участке.</div>
 
             <div class="shore-grid">
               <div class="shore-card a"><span>Участок A · Deuteronilus 1</span><b>−3907 м</b><small>медиана всех 40 точек</small></div>
@@ -241,18 +287,24 @@
               <div class="stat"><span>Длина B</span><b>51.488</b><small>км</small></div>
             </div>
 
+            <div class="mobile-segmented mobile-only" id="shore-chart-toggle" role="group" aria-label="Какой график показать">
+              <button type="button" data-shore-view="main" class="active">Профили A/B</button>
+              <button type="button" data-shore-view="dev">Отклонение</button>
+            </div>
+
             <div class="mini-actions">
               <button class="btn btn-ghost" type="button" id="shore-focus-a">Показать A</button>
               <button class="btn btn-ghost" type="button" id="shore-focus-b">Показать B</button>
-              <button class="btn btn-ghost" type="button" id="shore-expand">Развернуть графики ↗</button>
+              <button class="btn btn-ghost" type="button" id="shore-expand">Развернуть ↗</button>
             </div>
+            <button class="mobile-link mobile-only" type="button" data-mobile-menu="shore-notes">Подробнее о проверке</button>
 
-            <div class="chart-card">
+            <div class="chart-card main">
               <div class="card-head"><div><span>Высота по расстоянию</span><b>A и B</b></div><small>один масштаб</small></div>
               <canvas id="shore-chart" width="680" height="340" aria-label="Профили высоты участков берега A и B"></canvas>
             </div>
 
-            <div class="chart-card">
+            <div class="chart-card dev">
               <div class="card-head"><div><span>|B − уровень A|</span><b>по расстоянию</b></div><small>медиана 386 м</small></div>
               <canvas id="shore-dev-chart" width="680" height="240" aria-label="Отклонение высоты участка B от уровня A"></canvas>
             </div>
@@ -272,10 +324,11 @@
             <div class="eyebrow">Шаг 06 · геология</div>
             <h2>Возраст и материал</h2>
             <p class="lead">Фрагменты геологической карты USGS (Tanaka et al., 2014) вокруг выбранных кратеров. Карта объясняет, почему одинаковые по диаметру кратеры могут выглядеть по-разному.</p>
+            <div class="mobile-headline mobile-only">Молодые низменности и древние возвышенности.</div>
 
             <div class="geo-grid">
               <article class="geo-card">
-                <div class="geo-img"><img src="assets/geology_stokes.jpg" alt="Фрагмент геологической карты USGS вокруг кратера Stokes"><span class="crosshair"></span></div>
+                <div class="geo-img"><img src="assets/geology_stokes.jpg" alt="Фрагмент геологической карты USGS вокруг кратера Stokes"><span class="crosshair"></span><button class="geo-more mobile-only" type="button" data-mobile-geology="0" aria-label="Подробнее о Stokes">i</button></div>
                 <div class="geo-body">
                   <span class="geo-tag north">Stokes · север</span>
                   <h3>Молодые низменности</h3>
@@ -284,7 +337,7 @@
                 </div>
               </article>
               <article class="geo-card">
-                <div class="geo-img"><img src="assets/geology_horowitz.jpg" alt="Фрагмент геологической карты USGS вокруг кратера Horowitz"><span class="crosshair"></span></div>
+                <div class="geo-img"><img src="assets/geology_horowitz.jpg" alt="Фрагмент геологической карты USGS вокруг кратера Horowitz"><span class="crosshair"></span><button class="geo-more mobile-only" type="button" data-mobile-geology="1" aria-label="Подробнее о Horowitz">i</button></div>
                 <div class="geo-body">
                   <span class="geo-tag south">Horowitz · юг</span>
                   <h3>Древние возвышенности</h3>
@@ -293,6 +346,8 @@
                 </div>
               </article>
             </div>
+
+            <button class="mobile-link mobile-only" type="button" data-mobile-menu="geology-materials">Материалы и PDF</button>
 
             <div class="note">
               <b>Что различит объяснения?</b>

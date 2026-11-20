@@ -1,4 +1,4 @@
-import { formatNumber, formatMeters, formatInt } from './utils.js';
+import { formatNumber, formatMeters, formatInt, isMobileLayout } from './utils.js';
 import { Chart } from './charts.js';
 
 export class ShoreModule {
@@ -26,7 +26,19 @@ export class ShoreModule {
   focus(side) {
     const points = this.data.shore[side].points;
     const mid = points[Math.floor(points.length / 2)];
+    if (isMobileLayout()) {
+      window.dispatchEvent(new CustomEvent('mars-go-globe', {
+        detail: { lat: mid.lat, lon: mid.lon, distance: 1.75, toast: `Участок ${side} на глобусе.` },
+      }));
+      return;
+    }
     this.globe.flyTo(mid.lat, mid.lon, 1.75);
+  }
+
+  resizeCharts() {
+    for (const chart of this.charts) {
+      try { chart.resize(); } catch { /* hidden chart */ }
+    }
   }
 
   _chartOptions(wide = false) {

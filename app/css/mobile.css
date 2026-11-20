@@ -1,0 +1,910 @@
+/* =====================================================================
+   Mobile atlas — fixed screens, no page scrolling, menus only.
+   Desktop styles stay in style.css. This file is loaded after it.
+   ===================================================================== */
+
+.mobile-only { display: none !important; }
+
+@media (max-width: 760px), (max-height: 520px) and (orientation: landscape) and (max-width: 960px) {
+  :root {
+    --m-top: 48px;
+    --m-nav: 54px;
+    --m-pad: 12px;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    position: relative;
+    -webkit-text-size-adjust: 100%;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  body .app {
+    height: 100vh;
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: calc(var(--m-top) + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  /* ---------- topbar ---------- */
+  .topbar {
+    padding: env(safe-area-inset-top, 0px) 9px 0;
+    gap: 6px;
+    min-width: 0;
+    border-bottom-color: rgba(31, 48, 68, .7);
+  }
+  .brand { gap: 9px; min-width: 0; }
+  .brand-mark { width: 27px; height: 27px; }
+  .brand-mark span { height: 16%; top: 40%; }
+  .brand h1 {
+    font-size: 14px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  .brand p {
+    margin-top: 2px;
+    font-size: 8.5px;
+    letter-spacing: .08em;
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-actions { gap: 5px; flex: 0 0 auto; }
+  .data-chip, .top-actions .btn-label { display: none; }
+  .top-actions .btn {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 14px;
+  }
+  .top-actions .btn-accent { box-shadow: 0 5px 16px rgba(240, 122, 69, .2); }
+  .help-icon { display: inline-block; font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .play-icon { margin: 0; font-size: 11px; }
+  .top-actions .btn .play-icon { margin: 0; }
+
+  /* ---------- fixed screen shell ---------- */
+  .layout {
+    position: relative;
+    min-height: 0;
+    display: block;
+    overflow: hidden;
+  }
+  .stage {
+    position: absolute;
+    inset: 0 0 calc(var(--m-nav) + env(safe-area-inset-bottom, 0px)) 0;
+    padding: 0;
+    z-index: 0;
+  }
+  .globe-wrap {
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  #globe-canvas { touch-action: none; }
+  .sidebar {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: block;
+    border: 0;
+    background: transparent;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .sidebar-scroll {
+    position: absolute;
+    inset: 0 0 calc(var(--m-nav) + env(safe-area-inset-bottom, 0px)) 0;
+    overflow: hidden;
+    padding: 0;
+    pointer-events: none;
+  }
+  .sidebar-foot { display: none; }
+
+  /* ---------- bottom navigation ---------- */
+  .tabs {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    height: calc(var(--m-nav) + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    padding: 4px 3px calc(4px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(31, 48, 68, .85);
+    background: rgba(6, 10, 16, .96);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+  }
+  .tabs [data-tab="shore"] { display: none; }
+  .tabs button {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 2px 1px;
+    min-height: 0;
+    border: 0;
+    border-radius: 8px;
+    font-size: 10.5px;
+    font-weight: 650;
+    line-height: 1;
+    color: var(--muted-2);
+  }
+  .tabs button .tab-num { display: none; }
+  .tab-icon { display: block; width: 18px; height: 18px; }
+  .tab-label { white-space: nowrap; font-size: 10.5px; }
+  .tabs button.active,
+  .tabs button.mobile-active {
+    color: var(--accent-2);
+    background: rgba(240, 122, 69, .10);
+    border-color: transparent;
+  }
+
+  /* ---------- panels ---------- */
+  .panel {
+    position: absolute;
+    inset: 0;
+    display: none;
+    overflow: hidden;
+    padding: 9px var(--m-pad) 6px;
+    min-height: 0;
+    background:
+      radial-gradient(700px 500px at 80% -10%, rgba(240, 122, 69, .045), transparent 62%),
+      linear-gradient(180deg, #080d15, #060a10);
+    pointer-events: auto;
+  }
+  .panel.active {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    animation: none;
+  }
+  .panel[data-panel="globe"],
+  .panel[data-panel="ocean"] {
+    padding: 0;
+    background: transparent;
+    pointer-events: none;
+    display: none;
+  }
+  .panel[data-panel="globe"].active,
+  .panel[data-panel="ocean"].active { display: block; }
+  .panel[data-panel="globe"] > *,
+  .panel[data-panel="ocean"] > * { pointer-events: auto; }
+  .panel[data-panel="shore"] { padding-top: 41px; }
+
+  .panel .eyebrow,
+  .panel h2,
+  .panel .lead { display: none; }
+
+  .mobile-headline {
+    display: block !important;
+    flex: 0 0 auto;
+    margin: 0 0 1px;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.22;
+    font-weight: 700;
+    letter-spacing: -.015em;
+  }
+
+  .mobile-link {
+    display: block !important;
+    flex: 0 0 auto;
+    min-height: 28px;
+    padding: 4px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--accent-2);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mobile-link::after { content: " ↗"; color: var(--muted-2); }
+  .mobile-link:active { color: #ffd0b8; }
+
+  .mobile-pill {
+    min-height: 36px;
+    padding: 0 9px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: rgba(15, 25, 38, .82);
+    color: var(--text);
+    font-size: 11.5px;
+    font-weight: 650;
+    line-height: 1.1;
+    cursor: pointer;
+    white-space: nowrap;
+    backdrop-filter: blur(8px);
+  }
+  .mobile-pill:active { background: var(--panel-3); }
+
+  input[type=range] { height: 34px; }
+  input[type=range]::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -8.5px; }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; }
+
+  /* ---------- stage HUD ---------- */
+  .stage-top {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+  .coords {
+    min-width: 0;
+    max-width: 172px;
+    padding: 6px 8px;
+    border-radius: 10px;
+  }
+  .coords-label { display: none; }
+  .coords b { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .coords small { font-size: 9.5px; margin-top: 2px; white-space: nowrap; }
+  .stage-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 40px);
+    gap: 5px;
+    flex: 0 0 auto;
+  }
+  .round-btn { width: 40px; height: 40px; font-size: 10px; }
+  .stage-legend, .stage-caption { display: none; }
+  .app[data-tab="ocean"] .stage-top { display: none; }
+  .app[data-tab="craters"] .stage,
+  .app[data-tab="catalog"] .stage,
+  .app[data-tab="shore"] .stage,
+  .app[data-tab="geology"] .stage { visibility: hidden; }
+
+  /* ---------- globe screen ---------- */
+  .panel[data-panel="globe"] .control-card,
+  .panel[data-panel="globe"] .layer-list,
+  .panel[data-panel="globe"] .stat-grid,
+  .panel[data-panel="globe"] > .note { display: none; }
+  .quick-jumps {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 52px;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin: 0;
+  }
+  .quick-jumps [data-focus="stokes"],
+  .quick-jumps [data-focus="horowitz"] { display: none; }
+  .jump {
+    min-height: 36px;
+    padding: 4px 2px;
+    font-size: 10.5px;
+    border-radius: 8px;
+    background: rgba(5, 10, 16, .72);
+    border-color: rgba(255, 255, 255, .12);
+    backdrop-filter: blur(8px);
+  }
+  .mobile-globe-actions {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 4;
+    display: flex !important;
+    gap: 5px;
+  }
+  .mobile-globe-actions .mobile-pill { flex: 1; }
+
+  /* ---------- craters ---------- */
+  .panel[data-panel="craters"] .profile-check,
+  .panel[data-panel="craters"] > .note,
+  .panel[data-panel="craters"] .mini-actions { display: none; }
+  .crater-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    margin: 0;
+  }
+  .crater-card { padding: 9px 11px; border-radius: 12px; }
+  .crater-card h3 { font-size: 15px; }
+  .crater-card .cc-sub { font-size: 9.5px; }
+  .crater-card .cc-stats { gap: 10px; margin-top: 5px; padding-top: 5px; }
+  .crater-card .cc-stat { font-size: 9px; }
+  .crater-card .cc-stat b { font-size: 11.5px; }
+  .panel[data-panel="craters"] .btn-wide { flex: 0 0 auto; margin: 0; min-height: 38px; padding: 8px; font-size: 11.5px; }
+  .panel[data-panel="craters"] .mobile-link { flex: 0 0 auto; }
+
+  /* ---------- catalog ---------- */
+  .panel[data-panel="catalog"] .table-wrap,
+  .panel[data-panel="catalog"] > .note { display: none; }
+  .panel[data-panel="catalog"] .segmented { flex: 0 0 auto; height: 34px; margin: 0; }
+  .panel[data-panel="catalog"] .segmented button { font-size: 10px; padding: 0 2px; }
+  .panel[data-panel="catalog"] .stat-grid {
+    flex: 0 0 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+  }
+  .panel[data-panel="catalog"] .stat-grid .stat:first-child { display: none; }
+  .panel[data-panel="catalog"] .stat { padding: 6px 7px; border-radius: 9px; }
+  .panel[data-panel="catalog"] .stat span { font-size: 8.5px; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panel[data-panel="catalog"] .stat b { font-size: 14px; }
+  .panel[data-panel="catalog"] .stat small { display: none; }
+  .panel[data-panel="catalog"] .chart-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 5px 6px 4px;
+  }
+  .panel[data-panel="catalog"] .card-head { margin: 0 0 2px; }
+  .panel[data-panel="catalog"] .card-head span { font-size: 9px; }
+  .panel[data-panel="catalog"] .card-head b { font-size: 10px; }
+  .panel[data-panel="catalog"] .card-head small { font-size: 8.5px; }
+  .density-wrap { flex: 1 1 auto; min-height: 90px; }
+  #density-map { width: 100%; height: 100%; }
+  .density-scale { margin-top: 2px; font-size: 8px; }
+  .density-scale em { display: none; }
+  .panel[data-panel="catalog"] .switch { flex: 0 0 auto; padding: 5px 2px; min-height: 34px; border-bottom: 0; }
+  .panel[data-panel="catalog"] .switch b { font-size: 11px; }
+  .panel[data-panel="catalog"] .switch em { display: none; }
+  .mobile-action-row { display: flex !important; gap: 5px; flex: 0 0 auto; }
+  .mobile-action-row .mobile-pill { flex: 1; min-height: 33px; font-size: 10.5px; padding: 0 5px; }
+  .map-tooltip {
+    max-width: calc(100% - 8px);
+    white-space: normal;
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+
+  /* ---------- ocean ---------- */
+  .mobile-subtabs {
+    position: absolute;
+    z-index: 14;
+    top: 6px;
+    left: 8px;
+    display: none;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 9px;
+    background: rgba(5, 10, 16, .82);
+    backdrop-filter: blur(10px);
+    pointer-events: auto;
+  }
+  .app[data-tab="ocean"] .mobile-subtabs,
+  .app[data-tab="shore"] .mobile-subtabs { display: flex !important; }
+  .mobile-subtabs button {
+    height: 28px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .mobile-subtabs button.active { background: rgba(240, 122, 69, .16); color: var(--accent-2); }
+
+  .panel[data-panel="ocean"] .control-card,
+  .panel[data-panel="ocean"] .chart-card,
+  .panel[data-panel="ocean"] > .note,
+  .panel[data-panel="ocean"] .control-check,
+  .panel[data-panel="ocean"] .mini-actions { display: none; }
+  .panel[data-panel="ocean"] .stat-grid {
+    position: absolute;
+    z-index: 4;
+    top: 43px;
+    left: 8px;
+    right: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+  }
+  .panel[data-panel="ocean"] .stat-grid .stat:nth-child(3) { display: none; }
+  .panel[data-panel="ocean"] .stat {
+    padding: 5px 7px;
+    border-radius: 8px;
+    background: rgba(5, 10, 16, .68);
+    border-color: rgba(255, 255, 255, .12);
+    backdrop-filter: blur(9px);
+  }
+  .panel[data-panel="ocean"] .stat span { font-size: 8.5px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panel[data-panel="ocean"] .stat b { font-size: 13px; }
+  .panel[data-panel="ocean"] .stat small { display: none; }
+  .panel[data-panel="ocean"] .level-card {
+    position: absolute;
+    z-index: 4;
+    left: 8px;
+    right: 8px;
+    bottom: 43px;
+    margin: 0;
+    padding: 6px 9px;
+    border-radius: 10px;
+    background: rgba(5, 10, 16, .8);
+    border-color: rgba(255, 255, 255, .14);
+    backdrop-filter: blur(10px);
+  }
+  .panel[data-panel="ocean"] .level-top { font-size: 10.5px; }
+  .panel[data-panel="ocean"] .level-top b { font-size: 13px; }
+  .panel[data-panel="ocean"] input[type=range] { height: 34px; }
+  .panel[data-panel="ocean"] .level-range,
+  .panel[data-panel="ocean"] .level-input { display: none; }
+  .panel[data-panel="ocean"] .segmented {
+    position: absolute;
+    z-index: 4;
+    left: 8px;
+    bottom: 6px;
+    width: calc(50% - 10px);
+    height: 32px;
+    margin: 0;
+    background: rgba(5, 10, 16, .82);
+    border-color: rgba(255, 255, 255, .12);
+    backdrop-filter: blur(9px);
+  }
+  .panel[data-panel="ocean"] .segmented button { font-size: 9px; padding: 0 2px; }
+  .mobile-ocean-actions {
+    position: absolute;
+    z-index: 4;
+    right: 8px;
+    bottom: 6px;
+    width: calc(50% - 10px);
+    display: flex !important;
+    gap: 4px;
+  }
+  .mobile-ocean-actions .mobile-pill { flex: 1; min-height: 32px; font-size: 10px; padding: 0 4px; }
+
+  /* ---------- shore ---------- */
+  .panel[data-panel="shore"] .stat-grid,
+  .panel[data-panel="shore"] > .note { display: none; }
+  .panel[data-panel="shore"] .shore-grid { flex: 0 0 auto; gap: 5px; margin: 0; }
+  .panel[data-panel="shore"] .shore-card { padding: 6px 8px; border-radius: 9px; }
+  .panel[data-panel="shore"] .shore-card span { font-size: 8.5px; }
+  .panel[data-panel="shore"] .shore-card b { font-size: 15px; margin: 2px 0 1px; }
+  .panel[data-panel="shore"] .shore-card small { display: none; }
+  .panel[data-panel="shore"] .mini-actions {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+  }
+  .panel[data-panel="shore"] .mini-actions .btn { min-height: 33px; padding: 4px 3px; font-size: 9.5px; }
+  .panel[data-panel="shore"] .mobile-link { flex: 0 0 auto; min-height: 25px; padding: 2px; }
+  .mobile-segmented {
+    display: flex !important;
+    flex: 0 0 auto;
+    height: 31px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #080e17;
+  }
+  .mobile-segmented button {
+    flex: 1;
+    border: 0;
+    border-right: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted-2);
+    font-size: 10px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .mobile-segmented button:last-child { border-right: 0; }
+  .mobile-segmented button.active { background: rgba(240, 122, 69, .12); color: var(--accent-2); }
+  .panel[data-panel="shore"] .chart-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 5px 6px 4px;
+  }
+  .panel[data-panel="shore"] .chart-card.dev { display: none; }
+  .panel[data-panel="shore"].show-dev .chart-card.main { display: none; }
+  .panel[data-panel="shore"].show-dev .chart-card.dev { display: flex; }
+  .panel[data-panel="shore"] .chart-card canvas {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100% !important;
+  }
+
+  /* ---------- geology ---------- */
+  .panel[data-panel="geology"] .note,
+  .panel[data-panel="geology"] .source-links,
+  .panel[data-panel="geology"] .credit { display: none; }
+  .geo-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin: 0;
+  }
+  .geo-card {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 11px;
+  }
+  .geo-img {
+    flex: 1 1 auto;
+    min-height: 74px;
+    aspect-ratio: auto;
+  }
+  .geo-img .crosshair { display: none; }
+  .geo-body { flex: 0 0 auto; padding: 4px 8px 5px; }
+  .geo-body h3 { font-size: 12.5px; margin: 1px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .geo-body p { display: none; }
+  .geo-tag { font-size: 8px; }
+  .geo-more {
+    display: grid !important;
+    position: absolute;
+    z-index: 3;
+    top: 5px;
+    right: 5px;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, .25);
+    border-radius: 50%;
+    background: rgba(5, 10, 16, .7);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+  .panel[data-panel="geology"] .mobile-link { flex: 0 0 auto; }
+
+  /* ---------- modal pages / menus ---------- */
+  .modal-backdrop {
+    padding: 0;
+    place-items: stretch;
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+  .modal-card {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    animation-name: mobile-page-in;
+  }
+  @keyframes mobile-page-in { from { opacity: 0; transform: translateY(10px); } }
+  .modal-head {
+    padding: calc(8px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) 8px calc(12px + env(safe-area-inset-left, 0px));
+    gap: 10px;
+  }
+  .modal-head .eyebrow { font-size: 8.5px; margin-bottom: 3px; }
+  .modal-head h2 { font-size: 19px; line-height: 1.15; }
+  .modal-head p { font-size: 9.5px; line-height: 1.35; }
+  .modal-close { width: 40px; height: 40px; font-size: 19px; }
+  .modal-body {
+    padding: 9px calc(12px + env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .help-grid, .compare-grid { grid-template-columns: 1fr; gap: 9px; }
+  .help-card { padding: 11px; }
+  .help-card p, .help-card li { font-size: 11.5px; }
+  .formula { font-size: 10.5px; overflow-wrap: anywhere; }
+  .source-list a { padding: 10px 11px; font-size: 12px; }
+  .source-list small { font-size: 9.5px; }
+  .wide-chart { padding: 8px; }
+  .wide-chart canvas { height: min(52dvh, 440px); }
+  .legend-row { font-size: 10px; gap: 9px; }
+  .compare-chart canvas { height: 210px; }
+  .compare-table { overflow: hidden; }
+  .compare-table table { font-size: 10px; table-layout: fixed; }
+  .compare-table th, .compare-table td { padding: 6px 4px; overflow-wrap: anywhere; }
+  .compare-table th:first-child, .compare-table td:first-child { width: 42%; }
+  .compare-insight { font-size: 11px; }
+
+  /* crater page */
+  .mobile-crater-tabs {
+    display: flex !important;
+    gap: 3px;
+    padding: 3px;
+    margin: 0 0 7px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #080e17;
+  }
+  .mobile-crater-tabs button {
+    flex: 1;
+    min-height: 32px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted-2);
+    font-size: 10.5px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .mobile-crater-tabs button.active { background: rgba(240, 122, 69, .12); color: var(--accent-2); }
+  .crater-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+  .crater-modal .crater-grid {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    display: block;
+  }
+  .crater-modal .terrain-panel {
+    height: 100%;
+    min-height: 0;
+    border-radius: 11px;
+  }
+  .crater-modal .profile-panel {
+    height: 100%;
+    min-height: 0;
+    gap: 5px;
+  }
+  .crater-modal .terrain-hud .pill { font-size: 8px; padding: 4px 7px; }
+  .crater-modal .terrain-controls { left: 7px; right: 7px; bottom: 42px; padding: 5px 7px; gap: 7px; }
+  .crater-modal .terrain-controls label { font-size: 8.5px; }
+  .crater-modal .terrain-controls .btn { padding: 4px 6px; font-size: 8.5px; }
+  .crater-modal .measure-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .crater-modal .measure { padding: 5px 6px; border-radius: 8px; }
+  .crater-modal .measure span { font-size: 8px; }
+  .crater-modal .measure b { font-size: 12.5px; margin-top: 1px; }
+  .crater-modal .profile-chart-wrap { flex: 1 1 auto; min-height: 110px; padding: 4px; touch-action: none; }
+  .crater-modal #profile-chart { height: 100% !important; min-height: 0; touch-action: none; }
+  .crater-modal .profile-controls { gap: 4px; }
+  .crater-modal .profile-controls .btn { min-height: 34px; padding: 5px 8px; font-size: 9.5px; }
+  .crater-modal .x-toggle button { min-height: 34px; padding: 5px 7px; font-size: 9.5px; }
+  .crater-modal .measure-note,
+  .crater-modal .modal-body > .note { display: none; }
+  .crater-modal .crater-grid.mobile-profile .terrain-panel { display: none; }
+  .crater-modal .crater-grid.mobile-terrain .profile-panel { display: none; }
+
+  /* defense */
+  .defense-panel {
+    z-index: 90;
+    left: calc(8px + env(safe-area-inset-left, 0px));
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--m-nav) + env(safe-area-inset-bottom, 0px) + 8px);
+    width: auto;
+    max-height: calc(100dvh - 130px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 14px;
+  }
+  .defense-head { padding: 11px 13px 8px; }
+  .defense-head h3 { font-size: 15px; }
+  .defense-body { padding: 9px 13px 10px; }
+  .defense-body h4 { font-size: 15px; }
+  .defense-body p { font-size: 11px; }
+  .defense-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .defense-metrics span { font-size: 7.5px; }
+  .defense-metrics b { font-size: 10px; }
+  .defense-actions { padding: 0 13px 10px; }
+  .defense-tip { display: none; }
+
+  /* toast + boot */
+  .toast {
+    bottom: calc(var(--m-nav) + env(safe-area-inset-bottom, 0px) + 12px);
+    max-width: calc(100vw - 24px);
+    font-size: 11px;
+  }
+  .boot-card {
+    width: calc(100vw - 22px);
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    padding: 26px 20px 24px;
+    border-radius: 20px;
+  }
+  .boot h1 { font-size: clamp(28px, 9vw, 36px); }
+  .boot-sub { font-size: 13px; margin-bottom: 20px; }
+  .boot-orbit { width: 52px; height: 52px; margin-bottom: 18px; }
+  .boot-orbit::before { inset: 7px; }
+  .boot-orbit span { top: 0; left: 23px; transform-origin: 4px 25px; }
+
+  /* ---------- mobile menus ---------- */
+  .mobile-sheet .modal-card { background: #09101a; }
+  .mobile-sheet .modal-body { display: block; }
+  .mobile-sheet .modal-head h2 { font-size: 18px; }
+  .mobile-sheet .control-card,
+  .mobile-sheet .layer-list,
+  .mobile-sheet .stat-grid,
+  .mobile-sheet .note,
+  .mobile-sheet .table-wrap,
+  .mobile-sheet .mini-actions,
+  .mobile-sheet .control-check { margin-top: 8px; }
+  .mobile-sheet .mini-actions .btn { min-height: 40px; font-size: 11px; }
+  .mobile-sheet .switch { min-height: 44px; }
+  .mobile-sheet .note p { font-size: 12px; }
+  .menu-caption {
+    margin: 4px 0 5px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .mobile-sheet .level-input { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; }
+  .mobile-sheet .level-input::before { content: "Точный уровень воды, м"; flex-basis: 100%; color: var(--muted); font-size: 11px; font-weight: 600; }
+  .mobile-sheet .level-input input { width: 120px; min-height: 40px; font-size: 16px; }
+  .mobile-sheet .level-input span { font-size: 12px; color: var(--muted); }
+  .menu-legend {
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: rgba(15, 25, 38, .45);
+    padding: 12px;
+    margin-top: 10px;
+  }
+  .menu-legend .legend-title { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; }
+  .menu-legend .legend-title span { color: var(--accent-2); }
+  .menu-legend .legend-bar { height: 8px; border-radius: 99px; margin: 8px 0 4px; background: linear-gradient(90deg, #1c113a 0%, #223c70 16%, #2a6f82 32%, #6f8f68 48%, #b09e72 62%, #cbb080 72%, #bb703f 84%, #8a3922 92%, #e8d7c3 100%); border: 1px solid rgba(255, 255, 255, .08); }
+  .menu-legend .legend-ticks { display: flex; justify-content: space-between; color: var(--muted-2); font-family: var(--mono); font-size: 9px; }
+  .menu-legend .legend-note { color: var(--muted-2); font-size: 9.5px; margin-top: 5px; }
+  .geo-detail-img { width: 100%; border-radius: 11px; display: block; margin-bottom: 10px; }
+
+  /* ---------- compact tiers (set by mobile.js) ---------- */
+  .is-compact .panel { padding: 8px 10px 5px; gap: 6px; }
+  .is-compact .mobile-headline { font-size: 13.5px; }
+  .is-tiny .panel { padding: 7px 9px 4px; gap: 5px; }
+  .is-tiny .mobile-headline { font-size: 13px; line-height: 1.18; }
+  .is-tiny .panel[data-panel="shore"] { padding-top: 37px; }
+  .is-tiny .panel[data-panel="ocean"] .stat-grid { top: 38px; }
+  .is-tiny .panel[data-panel="ocean"] .level-card { bottom: 41px; }
+  .is-tiny .panel[data-panel="ocean"] .segmented,
+  .is-tiny .mobile-ocean-actions { bottom: 5px; }
+  .is-tiny .mobile-subtabs { top: 4px; }
+  .is-tiny .crater-card { padding: 7px 9px; }
+  .is-tiny .crater-card .cc-sub { display: none; }
+  .is-tiny .crater-card .cc-stats { margin-top: 3px; padding-top: 4px; }
+  .is-tiny .crater-card .cc-stat { font-size: 8.5px; }
+  .is-tiny .crater-card .cc-stat b { font-size: 11px; }
+  .is-tiny .panel[data-panel="craters"] .btn-wide { min-height: 35px; padding: 6px; font-size: 10.5px; }
+  .is-tiny .panel[data-panel="catalog"] .stat b { font-size: 13px; }
+  .is-tiny .panel[data-panel="catalog"] .stat span { font-size: 8px; }
+  .is-tiny .panel[data-panel="catalog"] .card-head small { display: none; }
+  .is-tiny .panel[data-panel="shore"] .shore-card b { font-size: 14px; }
+  .is-tiny .panel[data-panel="shore"] .mini-actions .btn { min-height: 30px; font-size: 9px; }
+  .is-tiny .panel[data-panel="shore"] .mobile-link { min-height: 22px; font-size: 10.5px; }
+  .is-tiny .panel[data-panel="geology"] .geo-img { min-height: 58px; }
+  .is-tiny .panel[data-panel="geology"] .geo-body h3 { font-size: 12px; }
+  .is-tiny .panel[data-panel="geology"] .mobile-link { min-height: 22px; font-size: 10.5px; }
+  .is-tiny .crater-modal .modal-body { overflow-y: auto; }
+  .is-tiny .crater-modal .crater-grid.mobile-profile { height: auto; }
+  .is-tiny .quick-jumps { bottom: 48px; }
+  .is-tiny .jump { min-height: 33px; font-size: 10px; }
+  .is-tiny .mobile-globe-actions { bottom: 6px; }
+  .is-tiny .mobile-globe-actions .mobile-pill { min-height: 33px; font-size: 10.5px; }
+}
+
+/* Landscape phones: use width instead of height, keep the same fixed screens. */
+@media (max-height: 520px) and (orientation: landscape) and (max-width: 960px) {
+  :root { --m-top: 42px; --m-nav: 48px; --m-pad: 9px; }
+
+  .tabs { padding: 2px 3px calc(2px + env(safe-area-inset-bottom, 0px)); }
+  .tabs button { padding: 1px; }
+  .tab-icon { width: 17px; height: 17px; }
+  .tab-label { font-size: 10px; }
+  .top-actions .btn { width: 38px; height: 38px; min-height: 38px; }
+
+  .panel { padding: 6px 9px 4px; gap: 5px; }
+  .mobile-headline { font-size: 12.5px; }
+
+  /* globe */
+  .quick-jumps { bottom: 47px; }
+  .jump { min-height: 32px; font-size: 10px; }
+  .mobile-globe-actions { bottom: 5px; }
+  .mobile-globe-actions .mobile-pill { min-height: 32px; font-size: 10px; }
+
+  /* craters: two cards side by side */
+  .panel[data-panel="craters"] .crater-list { flex-direction: row; }
+  .panel[data-panel="craters"] .crater-card { flex: 1 1 0; }
+  .panel[data-panel="craters"] .btn-wide { min-height: 34px; }
+
+  /* catalog: map on the left, compact controls on the right */
+  .panel[data-panel="catalog"].active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    grid-template-rows: auto auto auto 1fr auto;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+  .panel[data-panel="catalog"] .mobile-headline { grid-column: 1 / -1; grid-row: 1; }
+  .panel[data-panel="catalog"] .chart-card { grid-column: 1; grid-row: 2 / 6; }
+  .panel[data-panel="catalog"] #catalog-filter { grid-column: 2; grid-row: 2; }
+  .panel[data-panel="catalog"] .stat-grid { grid-column: 2; grid-row: 3; }
+  .panel[data-panel="catalog"] .switch { grid-column: 2; grid-row: 4; align-self: end; }
+  .panel[data-panel="catalog"] .mobile-action-row { grid-column: 2; grid-row: 5; }
+
+  /* shore: chart on the left, numbers on the right */
+  .panel[data-panel="shore"].active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    grid-template-rows: auto auto auto 1fr auto;
+    column-gap: 8px;
+    row-gap: 4px;
+    padding-top: 37px;
+  }
+  .panel[data-panel="shore"] .mobile-headline { grid-column: 1 / -1; grid-row: 1; }
+  .panel[data-panel="shore"] .chart-card { grid-column: 1; grid-row: 2 / 6; }
+  .panel[data-panel="shore"] .chart-card.main { display: flex; }
+  .panel[data-panel="shore"] .chart-card.dev { display: none; }
+  .panel[data-panel="shore"].show-dev .chart-card.main { display: none; }
+  .panel[data-panel="shore"].show-dev .chart-card.dev { display: flex; }
+  .panel[data-panel="shore"] .shore-grid { grid-column: 2; grid-row: 2; }
+  .panel[data-panel="shore"] .mobile-segmented { grid-column: 2; grid-row: 3; }
+  .panel[data-panel="shore"] .mini-actions { grid-column: 2; grid-row: 4; align-self: start; }
+  .panel[data-panel="shore"] .mobile-link { grid-column: 2; grid-row: 5; }
+
+  /* geology: two cards side by side */
+  .panel[data-panel="geology"] .geo-grid { flex-direction: row; }
+  .panel[data-panel="geology"] .geo-card { flex: 1 1 0; }
+  .panel[data-panel="geology"] .geo-img { min-height: 62px; }
+  .panel[data-panel="geology"] .geo-body h3 { font-size: 12px; }
+  .panel[data-panel="geology"] .mobile-link { min-height: 22px; }
+
+  /* ocean: globe on the left, controls on the right */
+  .panel[data-panel="ocean"] .stat-grid { left: auto; right: 8px; width: 310px; top: 40px; }
+  .panel[data-panel="ocean"] .level-card { left: auto; right: 8px; width: 310px; bottom: 44px; }
+  .panel[data-panel="ocean"] .segmented { left: auto; right: 166px; width: 146px; bottom: 6px; }
+  .mobile-ocean-actions { right: 8px; width: 150px; bottom: 6px; }
+  .panel[data-panel="ocean"] .stat b { font-size: 13px; }
+  .panel[data-panel="ocean"] .stat span { font-size: 8px; }
+  .mobile-subtabs { top: 5px; }
+
+  /* crater detail: 3D and profile side by side */
+  .crater-modal .mobile-crater-tabs { display: none !important; }
+  .crater-modal .crater-grid {
+    display: grid;
+    grid-template-columns: 1.05fr .95fr;
+    gap: 8px;
+    height: 100%;
+  }
+  .crater-modal .terrain-panel { display: block !important; height: 100%; min-height: 0; }
+  .crater-modal .profile-panel { display: flex !important; height: 100%; min-height: 0; }
+  .crater-modal .measure-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .crater-modal .profile-chart-wrap { min-height: 70px; }
+  .crater-modal .profile-controls .btn { padding: 4px 5px; font-size: 8.5px; }
+  .crater-modal .modal-head { padding-top: 7px; padding-bottom: 6px; }
+  .crater-modal .modal-head h2 { font-size: 17px; }
+
+  /* defense card stays on the right in landscape */
+  .defense-panel {
+    left: auto;
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    width: 380px;
+    bottom: calc(var(--m-nav) + env(safe-area-inset-bottom, 0px) + 8px);
+    max-height: calc(100dvh - 58px);
+  }
+}
+
+@media (max-width: 350px) {
+  .brand h1 { font-size: 13px; }
+  .brand p { max-width: 150px; }
+  .tabs button { font-size: 10px; }
+  .tab-label { font-size: 10px; }
+  .mobile-headline { font-size: 12.5px; }
+  .panel[data-panel="catalog"] .stat b { font-size: 12.5px; }
+  .panel[data-panel="catalog"] .stat span { font-size: 7.8px; }
+  .panel[data-panel="shore"] .shore-card b { font-size: 13px; }
+}

@@ -1,4 +1,4 @@
-import { clamp, formatNumber, formatInt } from './utils.js';
+import { clamp, formatNumber, formatInt, isMobileLayout, MOBILE_MEDIA } from './utils.js';
 import { drawDensityMap, densityGridFor } from './charts.js';
 
 const POINTS = [
@@ -18,6 +18,7 @@ export class CatalogModule {
     this.cache = new Map();
     this.mapGeom = null;
     this.densityOn = false;
+    this.selected = null;
     this._bind();
     this._fillTable();
     this._update();
@@ -30,19 +31,50 @@ export class CatalogModule {
       if (!b) return;
       this.group = b.dataset.group;
       filter.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+      const tip = document.getElementById('density-tooltip');
+      if (tip) tip.hidden = true;
       this._update();
     });
     const cb = document.getElementById('density-checkbox');
-    cb?.addEventListener('change', () => this.setDensity(cb.checked));
+    cb?.addEventListener('change', () => {
+      this.setDensity(cb.checked);
+      if (cb.checked && this._isMobile()) {
+        window.dispatchEvent(new CustomEvent('mars-go-globe', {
+          detail: { density: true, toast: 'Плотность включена на глобусе.' },
+        }));
+      }
+    });
     const layer = document.getElementById('layer-density');
     layer?.addEventListener('change', () => this.setDensity(layer.checked));
+    document.getElementById('mobile-catalog-globe')?.addEventListener('click', () => this.goGlobe());
     const canvas = document.getElementById('density-map');
     canvas?.addEventListener('pointermove', (e) => this._tooltip(e));
     canvas?.addEventListener('pointerleave', () => {
+      if (this._isMobile()) return;
       const t = document.getElementById('density-tooltip');
       if (t) t.hidden = true;
     });
     canvas?.addEventListener('click', (e) => this._click(e));
+    if (canvas && typeof ResizeObserver !== 'undefined') {
+      this.mapObserver = new ResizeObserver(() => this._update());
+      this.mapObserver.observe(canvas);
+    }
+    window.matchMedia?.(MOBILE_MEDIA)?.addEventListener?.('change', () => this._update());
+  }
+
+  _isMobile() {
+    return isMobileLayout();
+  }
+
+  goGlobe() {
+    const p = this.selected;
+    const tip = document.getElementById('density-tooltip');
+    if (tip) tip.hidden = true;
+    window.dispatchEvent(new CustomEvent('mars-go-globe', {
+      detail: p
+        ? { lat: p.lat, lon: p.lon, distance: 2.5, toast: 'Ячейка на глобусе.' }
+        : { toast: 'Открыт глобус.' },
+    }));
   }
 
   _grid() {
@@ -138,6 +170,11 @@ export class CatalogModule {
     const step = this.mapGeom.step || 3;
     const lon = (c + 0.5) * step;
     const lat = 90 - (r + 0.5) * step;
+    this.selected = { lat, lon, col: c, row: r };
+    if (this._isMobile()) {
+      this._tooltip(e);
+      return;
+    }
     this.globe.flyTo(lat, lon, 2.5);
   }
 }

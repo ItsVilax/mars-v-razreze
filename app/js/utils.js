@@ -3,6 +3,11 @@ export const R_MARS_M = 3389500;
 export const HEMI_AREA_MKM2 = 2 * Math.PI * R_MARS_KM * R_MARS_KM / 1e6;
 export const TAU = Math.PI * 2;
 
+// Portrait phones and phones turned sideways. The second clause keeps the
+// fixed-screen UI on a short landscape viewport instead of a scrolling sidebar.
+export const MOBILE_MEDIA = '(max-width: 760px), (max-height: 520px) and (orientation: landscape) and (max-width: 960px)';
+export const isMobileLayout = () => window.matchMedia?.(MOBILE_MEDIA)?.matches || false;
+
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const deg = (r) => r * 180 / Math.PI;

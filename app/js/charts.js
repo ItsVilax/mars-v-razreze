@@ -1,4 +1,4 @@
-import { clamp, formatNumber, formatInt, densityColor } from './utils.js';
+import { clamp, formatNumber, formatInt, densityColor, isMobileLayout } from './utils.js';
 
 const FONT = '"Segoe UI", Inter, Arial, sans-serif';
 const MONO = '"Cascadia Code", Consolas, monospace';
@@ -52,6 +52,7 @@ export class Chart {
     this._resizeObserver = null;
     this._lastW = 0;
     this._lastH = 0;
+    this._compact = false;
     this.resize();
     if (typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(() => this.resize());
@@ -70,7 +71,8 @@ export class Chart {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const isPhone = isMobileLayout();
+    const dpr = Math.min(window.devicePixelRatio || 1, isPhone ? 1.75 : 2);
     const w = Math.max(1, Math.round(this.canvas.clientWidth || this.canvas.width || 600));
     const h = Math.max(1, Math.round(this.canvas.clientHeight || this.canvas.height || 280));
     if (this.canvas.width !== Math.round(w * dpr) || this.canvas.height !== Math.round(h * dpr)) {
@@ -80,11 +82,15 @@ export class Chart {
     this._w = w;
     this._h = h;
     this._dpr = dpr;
+    this._compact = isPhone && (w < 470 || h < 230);
     this.draw();
   }
 
   plotBox() {
-    const { left, right, top, bottom } = this.opts.padding;
+    const pad = this._compact
+      ? { left: 44, right: 10, top: 14, bottom: 30 }
+      : this.opts.padding;
+    const { left, right, top, bottom } = pad;
     return { x: left, y: top, w: this._w - left - right, h: this._h - top - bottom };
   }
 
@@ -145,8 +151,8 @@ export class Chart {
       ctx.strokeStyle = 'rgba(94, 126, 158, .16)';
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
-      const xt = niceTicks(o.xMin, o.xMax, 5);
-      const yt = niceTicks(o.yMin, o.yMax, 4);
+      const xt = niceTicks(o.xMin, o.xMax, this._compact ? 4 : 5);
+      const yt = niceTicks(o.yMin, o.yMax, this._compact ? 3 : 4);
       for (const t of xt) {
         const px = this.xToPx(t);
         if (px < b.x || px > b.x + b.w) continue;
@@ -167,11 +173,11 @@ export class Chart {
     ctx.stroke();
 
     // ticks
-    ctx.font = `9.5px ${MONO}`;
+    ctx.font = `${this._compact ? 10 : 9.5}px ${MONO}`;
     ctx.fillStyle = 'rgba(141, 157, 178, .85)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const xt = niceTicks(o.xMin, o.xMax, 5);
+    const xt = niceTicks(o.xMin, o.xMax, this._compact ? 4 : 5);
     for (const t of xt) {
       const px = this.xToPx(t);
       if (px < b.x - 1 || px > b.x + b.w + 1) continue;
@@ -181,7 +187,7 @@ export class Chart {
     }
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    const yt = niceTicks(o.yMin, o.yMax, 4);
+    const yt = niceTicks(o.yMin, o.yMax, this._compact ? 3 : 4);
     for (const t of yt) {
       const py = this.yToPx(t);
       if (py < b.y - 1 || py > b.y + b.h + 1) continue;
@@ -360,7 +366,8 @@ export class Chart {
 
 export function drawDensityMap(canvas, grid, opts = {}) {
   const ctx = canvas.getContext('2d');
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const isPhone = isMobileLayout();
+  const dpr = Math.min(window.devicePixelRatio || 1, isPhone ? 1.75 : 2);
   const cssW = canvas.clientWidth || canvas.width;
   const cssH = canvas.clientHeight || canvas.height;
   if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
@@ -370,7 +377,7 @@ export function drawDensityMap(canvas, grid, opts = {}) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const w = cssW, h = cssH;
   ctx.clearRect(0, 0, w, h);
-  const pad = { l: 30, r: 8, t: 8, b: 18 };
+  const pad = { l: w < 380 ? 25 : 30, r: 7, t: 6, b: 16 };
   const bw = w - pad.l - pad.r;
   const bh = h - pad.t - pad.b;
   const step = opts.step || 5;
@@ -402,8 +409,8 @@ export function drawDensityMap(canvas, grid, opts = {}) {
   ctx.strokeStyle = 'rgba(141,157,178,.35)';
   ctx.strokeRect(pad.l, pad.t, bw, bh);
   // labels
-  ctx.font = `8px ${MONO}`;
-  ctx.fillStyle = 'rgba(141,157,178,.8)';
+  ctx.font = `${isPhone ? 9 : 8}px ${MONO}`;
+  ctx.fillStyle = 'rgba(141,157,178,.82)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   for (const lon of [0, 90, 180, 270, 360]) {
