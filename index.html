@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b12">
+  <title>Марс в разрезе — интерактивный 3D-атлас</title>
+  <meta name="description" content="Интерактивный 3D-атлас Марса: MOLA, профили кратеров, каталог, заливка северного бассейна и проверка берега Deuteronilus.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23c75b32'/%3E%3Cpath d='M12 28c8-6 14 4 22 0s14-6 20 0' stroke='%23ffb38a' stroke-width='4' fill='none'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="app/css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="boot" class="boot">
+    <div class="boot-card">
+      <div class="boot-orbit" aria-hidden="true"><span></span></div>
+      <div class="boot-kicker">MOLA · MARS GLOBAL SURVEYOR</div>
+      <h1>Марс в разрезе</h1>
+      <p class="boot-sub">Загружаю 16 пикселей на градус, 10 892 кратера и 223 851 контрольную ячейку.</p>
+      <div class="boot-progress"><i id="boot-bar"></i></div>
+      <div class="boot-status" id="boot-status">Инициализация…</div>
+      <div class="boot-detail" id="boot-detail"></div>
+      <div class="boot-error" id="boot-error" hidden>
+        <b>Не удалось загрузить данные.</b>
+        <p id="boot-error-text"></p>
+        <p>Запустите проект через <code>start.bat</code> или <code>python serve.py</code>, а не открывайте <code>index.html</code> напрямую: браузер блокирует чтение локальных файлов.</p>
+        <button class="btn" id="boot-retry" type="button">Повторить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="app is-hidden">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span></div>
+        <div>
+          <h1>Марс в разрезе</h1>
+          <p>интерактивный 3D-атлас · MOLA / MGS</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="data-chip" title="Исходная сетка MOLA 16 пикселей на градус">
+          <span class="dot"></span> MOLA 16 px/°
+        </div>
+        <button class="btn btn-ghost" id="btn-help" type="button">Методика</button>
+        <button class="btn btn-accent" id="btn-defense" type="button">
+          <span class="play-icon" aria-hidden="true">▶</span> Режим защиты
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <nav class="tabs" id="tabs" aria-label="Разделы атласа">
+          <button type="button" data-tab="globe" class="active"><span>01</span> Глобус</button>
+          <button type="button" data-tab="craters"><span>02</span> Кратеры</button>
+          <button type="button" data-tab="catalog"><span>03</span> Каталог</button>
+          <button type="button" data-tab="ocean"><span>04</span> Океан</button>
+          <button type="button" data-tab="shore"><span>05</span> Берег</button>
+          <button type="button" data-tab="geology"><span>06</span> Геология</button>
+        </nav>
+
+        <div class="sidebar-scroll" id="sidebar-scroll">
+          <section class="panel active" data-panel="globe">
+            <div class="eyebrow">Шаг 01 · глобус</div>
+            <h2>Марс целиком</h2>
+            <p class="lead">Вращайте планету, приближайте кратеры и читайте высоту относительно ареоида. Цвет — только отображение; все измерения остаются в исходных метрах.</p>
+
+            <div class="quick-jumps">
+              <button type="button" class="jump" data-focus="north">Север</button>
+              <button type="button" class="jump" data-focus="south">Юг</button>
+              <button type="button" class="jump" data-focus="utopia">Утопия</button>
+              <button type="button" class="jump" data-focus="hellas">Эллада</button>
+              <button type="button" class="jump" data-focus="stokes">Stokes</button>
+              <button type="button" class="jump" data-focus="horowitz">Horowitz</button>
+            </div>
+
+            <div class="control-card">
+              <div class="control-head"><span>Вертикальное усиление</span><b id="globe-exag-val">×20</b></div>
+              <input type="range" id="globe-exag" min="1" max="60" value="20" step="1" aria-label="Вертикальное усиление глобуса">
+              <p class="hint">Меняет только рисунок рельефа. Расчёты глубины, площади и заливки не меняются.</p>
+            </div>
+
+            <div class="layer-list">
+              <label class="switch"><input type="checkbox" id="layer-density"><span></span><b>Плотность кратеров</b><em>ячейки 5° × 5°</em></label>
+              <label class="switch"><input type="checkbox" id="layer-points"><span></span><b>Точки каталога</b><em>10 892 кратера</em></label>
+              <label class="switch"><input type="checkbox" id="layer-graticule" checked><span></span><b>Сетка координат</b><em>30°</em></label>
+              <label class="switch"><input type="checkbox" id="layer-water"><span></span><b>Слой воды</b><em>уровень из шага 04</em></label>
+            </div>
+
+            <div class="stat-grid tight">
+              <div class="stat"><span>Исходник глобуса</span><b>2880 × 5760</b><small>int16, big-endian</small></div>
+              <div class="stat"><span>Диапазон высот</span><b id="stat-range">—</b><small>метры от ареоида</small></div>
+              <div class="stat"><span>Отображение</span><b>4 px/°</b><small>текстура 8 px/°</small></div>
+              <div class="stat"><span>Нулевой уровень</span><b>ареоид</b><small>0 — не пропуск</small></div>
+            </div>
+
+            <div class="note">
+              <b>Почему −4000 м выше, чем −5000 м?</b>
+              <p>Высота отсчитывается от ареоида: чем меньше модуль отрицательного числа, тем ближе поверхность к нулевому уровню. Поэтому −4000 м лежит выше −5000 м.</p>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="craters">
+            <div class="eyebrow">Шаг 02 · кратеры</div>
+            <h2>Один разрез — два полушария</h2>
+            <p class="lead">Профиль идёт через центр кратера с запада на восток. Края вала и дно можно перетаскивать: приложение пересчитает <code>d = (z₁ + z₂)/2 − zmin</code> и <code>d / (1000D)</code>.</p>
+
+            <div class="crater-list" id="crater-cards"></div>
+
+            <button class="btn btn-wide" id="compare-btn" type="button">Сравнить Stokes и Horowitz →</button>
+
+            <div class="note accent-note" id="profile-check">
+              <b>Проверка источника</b>
+              <p>Сверяю строку 96 северного фрагмента с файлом <code>Профиль_Стокса.csv</code> после загрузки.</p>
+            </div>
+
+            <div class="note">
+              <b>Что считается глубиной</b>
+              <p>Глубина <i>d</i> — превышение среднего уровня двух краёв вала над минимумом между ними. Это не абсолютная высота дна: дно Stokes лежит на −5510 м, но его глубина от вала — около 2083 м.</p>
+            </div>
+
+            <div class="mini-actions">
+              <button class="btn btn-ghost" type="button" data-focus="stokes">Показать Stokes на глобусе</button>
+              <button class="btn btn-ghost" type="button" data-focus="horowitz">Показать Horowitz</button>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="catalog">
+            <div class="eyebrow">Шаг 03 · каталог</div>
+            <h2>Кратеры и площадь</h2>
+            <p class="lead">Каталог Robbins &amp; Hynek в снимке PADC: все строки с диаметром ≥ 20 км. Полушарие определяется по широте центра.</p>
+
+            <div class="segmented" id="catalog-filter" role="group" aria-label="Группа диаметров">
+              <button type="button" data-group="all" class="active">все ≥ 20</button>
+              <button type="button" data-group="20-50">20–50</button>
+              <button type="button" data-group="50-100">50–100</button>
+              <button type="button" data-group="100+">≥ 100</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Группа</th><th>Север</th><th>Юг</th><th>Всего</th></tr></thead>
+                <tbody id="catalog-table-body"></tbody>
+              </table>
+            </div>
+
+            <div class="stat-grid tight">
+              <div class="stat"><span>Площадь полушария</span><b>72.186</b><small>млн км² · 2πR²</small></div>
+              <div class="stat"><span>Плотность, север</span><b id="density-north">—</b><small>на 1 млн км²</small></div>
+              <div class="stat"><span>Плотность, юг</span><b id="density-south">—</b><small>на 1 млн км²</small></div>
+              <div class="stat"><span>Отношение юг/север</span><b id="density-ratio">—</b><small>по выбранной группе</small></div>
+            </div>
+
+            <div class="chart-card">
+              <div class="card-head"><div><span>Карта плотности</span><b>5° × 5°</b></div><small>площадь учтена · ячейки</small></div>
+              <div class="density-wrap">
+                <canvas id="density-map" width="640" height="330" aria-label="Карта плотности кратеров по ячейкам 5 на 5 градусов"></canvas>
+                <div class="map-tooltip" id="density-tooltip" hidden></div>
+              </div>
+              <div class="density-scale"><span>0</span><i></i><span id="density-max">макс.</span><em>кратеров / млн км²</em></div>
+            </div>
+
+            <label class="switch"><input type="checkbox" id="density-checkbox"><span></span><b>Наложить на глобус</b><em>цвет = плотность</em></label>
+
+            <div class="note">
+              <b>Граница вывода</b>
+              <p>Число видимых кратеров не даёт единственного возраста поверхности. Север и юг включают разные геологические области; каталог не содержит бассейн Prometheus по технической причине источника.</p>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="ocean">
+            <div class="eyebrow">Шаг 04 · океан</div>
+            <h2>Северный бассейн</h2>
+            <p class="lead">Вода заливает только ячейки ниже уровня <i>h</i>, до которых есть непрерывный путь от Утопии через общую сторону. Столбцы по долготе замкнуты, полюса — нет.</p>
+
+            <div class="level-card">
+              <div class="level-top"><span>Уровень воды</span><b id="ocean-level-label">−3800 м</b></div>
+              <input type="range" id="ocean-level" min="-6000" max="2000" value="-3800" step="10" aria-label="Уровень воды в метрах">
+              <div class="level-range"><span>−6000 м</span><span>0</span><span>+2000 м</span></div>
+              <div class="level-input"><input type="number" id="ocean-level-num" value="-3800" min="-6000" max="2000" step="10" aria-label="Уровень воды числом"><span>м</span></div>
+            </div>
+
+            <div class="stat-grid">
+              <div class="stat accent"><span>Залито ячеек</span><b id="ocean-cells">—</b><small>связная область</small></div>
+              <div class="stat accent"><span>Площадь</span><b id="ocean-area">—</b><small>млн км²</small></div>
+              <div class="stat"><span>Глубина в Утопии</span><b id="ocean-start-depth">—</b><small>h − z старта</small></div>
+              <div class="stat"><span>Эллада</span><b id="ocean-hellas">—</b><small>соединение с Утопией</small></div>
+            </div>
+
+            <div class="control-check" id="ocean-control">
+              <div class="check-icon">✓</div>
+              <div><b>Контроль модели · −3800 м</b><p id="ocean-control-text">Проверяю 223 851 ячейку и 23.070 млн км²…</p></div>
+            </div>
+
+            <div class="segmented" id="ocean-mode" role="group" aria-label="Режим заливки">
+              <button type="button" data-mode="connected" class="active">от Утопии</button>
+              <button type="button" data-mode="all">все низкие места</button>
+            </div>
+
+            <div class="mini-actions">
+              <button class="btn btn-ghost" type="button" id="ocean-utopia-btn">В Утопию</button>
+              <button class="btn btn-ghost" type="button" id="ocean-hellas-btn">К Элладе</button>
+              <button class="btn btn-ghost" type="button" id="ocean-spill-btn">Порог +1304 м</button>
+              <button class="btn btn-ghost" type="button" id="ocean-reset-btn">Сброс −3800</button>
+            </div>
+
+            <div class="chart-card">
+              <div class="card-head"><div><span>Уровень — площадь</span><b id="ocean-chart-badge">—</b></div><button class="link-btn" type="button" id="ocean-expand">Развернуть ↗</button></div>
+              <canvas id="ocean-chart" width="680" height="320" aria-label="График зависимости площади заливки от уровня воды"></canvas>
+              <div class="chart-status" id="ocean-chart-status">Расчёт кривой…</div>
+            </div>
+
+            <div class="note" id="ocean-note">
+              <b>Почему нельзя красить всё ниже h?</b>
+              <p>При −3800 м Эллада лежит на −6028 м, но не соединена с Утопией: путь перекрыт высоким южным барьером. Заливка «все низкие места» даёт 244 249 ячеек и 26.565 млн км² — это другая, несвязная модель.</p>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="shore">
+            <div class="eyebrow">Шаг 05 · берег</div>
+            <h2>Один уровень на два участка</h2>
+            <p class="lead">Два фрагмента линии Deuteronilus версии Ivanov 2017 из архива Sholes 2.0.1. Уровень выбирается только по A и затем переносится на B без подгонки.</p>
+
+            <div class="shore-grid">
+              <div class="shore-card a"><span>Участок A · Deuteronilus 1</span><b>−3907 м</b><small>медиана всех 40 точек</small></div>
+              <div class="shore-card b"><span>Участок B · Astapus 1</span><b id="shore-b-median">—</b><small>медиана всех 41 точки</small></div>
+            </div>
+
+            <div class="stat-grid tight">
+              <div class="stat"><span>Медиана |B − уровень A|</span><b id="shore-dev">—</b><small>метры</small></div>
+              <div class="stat"><span>Диапазон B − A</span><b id="shore-range">—</b><small>метры</small></div>
+              <div class="stat"><span>Длина A</span><b>72.751</b><small>км</small></div>
+              <div class="stat"><span>Длина B</span><b>51.488</b><small>км</small></div>
+            </div>
+
+            <div class="mini-actions">
+              <button class="btn btn-ghost" type="button" id="shore-focus-a">Показать A</button>
+              <button class="btn btn-ghost" type="button" id="shore-focus-b">Показать B</button>
+              <button class="btn btn-ghost" type="button" id="shore-expand">Развернуть графики ↗</button>
+            </div>
+
+            <div class="chart-card">
+              <div class="card-head"><div><span>Высота по расстоянию</span><b>A и B</b></div><small>один масштаб</small></div>
+              <canvas id="shore-chart" width="680" height="340" aria-label="Профили высоты участков берега A и B"></canvas>
+            </div>
+
+            <div class="chart-card">
+              <div class="card-head"><div><span>|B − уровень A|</span><b>по расстоянию</b></div><small>медиана 386 м</small></div>
+              <canvas id="shore-dev-chart" width="680" height="240" aria-label="Отклонение высоты участка B от уровня A"></canvas>
+            </div>
+
+            <div class="note">
+              <b>Что это значит</b>
+              <p>На современном рельефе единый уровень A не описывает B: B выше на 376–404 м на всём участке 51.5 км. Это не доказывает отсутствие древнего океана и не исключает его: берег мог быть изменён тектоникой, осадками, лавой или эрозией; возможны и разные версии линии.</p>
+            </div>
+
+            <div class="note subtle">
+              <b>Как проверить дальше</b>
+              <p>Независимые участки и версии берега, возраст поверхности, стратиграфия перекрытий, следы деформации и сравнение с HRSC/MOLA. Уровень нельзя выбирать заново по B.</p>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="geology">
+            <div class="eyebrow">Шаг 06 · геология</div>
+            <h2>Возраст и материал</h2>
+            <p class="lead">Фрагменты геологической карты USGS (Tanaka et al., 2014) вокруг выбранных кратеров. Карта объясняет, почему одинаковые по диаметру кратеры могут выглядеть по-разному.</p>
+
+            <div class="geo-grid">
+              <article class="geo-card">
+                <div class="geo-img"><img src="assets/geology_stokes.jpg" alt="Фрагмент геологической карты USGS вокруг кратера Stokes"><span class="crosshair"></span></div>
+                <div class="geo-body">
+                  <span class="geo-tag north">Stokes · север</span>
+                  <h3>Молодые низменности</h3>
+                  <p>Вмещающая равнина — молодые низменные единицы <code>mAl</code> (Middle Amazonian) и соседняя <code>lHl</code> (Late Hesperian): лёсс, насыщенный льдом, перигляциальная переработка. Кратер и выбросы показаны импактной единицей.</p>
+                  <p class="muted">Поверхность моложе, чем Noachian highlands у Horowitz; вал мог быть сглажен, а дно — заполнено.</p>
+                </div>
+              </article>
+              <article class="geo-card">
+                <div class="geo-img"><img src="assets/geology_horowitz.jpg" alt="Фрагмент геологической карты USGS вокруг кратера Horowitz"><span class="crosshair"></span></div>
+                <div class="geo-body">
+                  <span class="geo-tag south">Horowitz · юг</span>
+                  <h3>Древние возвышенности</h3>
+                  <p>Вокруг — Noachian highland units <code>Nhe</code>, <code>lNh</code>, <code>mNh</code>: древние деградированные вулканические и импактные породы. Кратер также показан импактной единицей.</p>
+                  <p class="muted">Поверхность дольше накапливала удары; это согласуется с более высокой плотностью кратеров на юге.</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="note">
+              <b>Что различит объяснения?</b>
+              <p>Заполнение дна лавой или осадками даёт слоистость, эмбеймент вала, молодой возраст дна и контакты единиц. Древняя поверхность даёт насыщенную кратерность и деградированный вал. Нужны кратерные размеры-частоты, стратиграфия и минералогия — одна пара кратеров не характеризует полушарие.</p>
+            </div>
+
+            <div class="source-links">
+              <a href="prompt/geology_map_usgs.pdf" target="_blank" rel="noopener">Геологическая карта USGS (PDF) ↗</a>
+              <a href="prompt/geology_units_usgs.pdf" target="_blank" rel="noopener">Легенда единиц (PDF) ↗</a>
+            </div>
+            <p class="credit">USGS Scientific Investigations Map 3292, Tanaka et al., 2014. Фрагменты вырезаны из предоставленного PDF; крест — положение центра кратера.</p>
+          </section>
+        </div>
+
+        <div class="sidebar-foot">
+          <span id="data-status">данные не загружены</span>
+          <button class="link-btn" id="btn-sources" type="button">Источники</button>
+        </div>
+      </aside>
+
+      <section class="stage" aria-label="3D-вид Марса">
+        <div class="globe-wrap" id="globe-wrap">
+          <canvas id="globe-canvas"></canvas>
+          <div class="globe-vignette" aria-hidden="true"></div>
+          <div class="globe-labels" id="globe-labels"></div>
+
+          <div class="stage-top">
+            <div class="coords" id="coords-readout">
+              <span class="coords-label">курсор</span>
+              <b>—</b>
+              <small>высота —</small>
+            </div>
+            <div class="stage-buttons">
+              <button class="round-btn" type="button" id="view-reset" title="Сбросить вид">⌂</button>
+              <button class="round-btn" type="button" id="view-north" title="Северный полюс">N</button>
+              <button class="round-btn" type="button" id="view-south" title="Южный полюс">S</button>
+              <button class="round-btn" type="button" id="view-rotate" title="Автовращение">↻</button>
+            </div>
+          </div>
+
+          <div class="stage-legend" id="legend">
+            <div class="legend-title">Высота, м <span id="legend-exag">×20</span></div>
+            <div class="legend-bar"></div>
+            <div class="legend-ticks"><span>−8 000</span><span>0</span><span>+12 000+</span></div>
+            <div class="legend-note">MOLA · ареоид · выше +12 км светлее</div>
+          </div>
+
+          <div class="stage-caption" id="stage-caption">
+            <span class="live-dot"></span>
+            <span id="stage-caption-text">MOLA 16 px/° · отображение 4 px/° · вертикальное усиление ×20</span>
+          </div>
+
+          <div class="stage-loading" id="stage-loading" hidden>
+            <div class="spinner"></div><span>Перестраиваю вид…</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <noscript>
+    <div class="noscript">Для работы атласа нужен JavaScript.</div>
+  </noscript>
+
+  <script>
+    // ES modules and fetch cannot read local data over file://. Give a useful
+    // instruction instead of a blank boot screen if someone double-clicks the HTML.
+    if (location.protocol === 'file:') {
+      document.addEventListener('DOMContentLoaded', function () {
+        var status = document.getElementById('boot-status');
+        var detail = document.getElementById('boot-detail');
+        var error = document.getElementById('boot-error');
+        var errorText = document.getElementById('boot-error-text');
+        var bar = document.getElementById('boot-bar');
+        if (status) status.textContent = 'Нужен локальный сервер';
+        if (detail) detail.textContent = 'file:// · браузер блокирует загрузку данных';
+        if (bar) bar.style.width = '4%';
+        if (error) error.hidden = false;
+        if (errorText) {
+          errorText.textContent = 'Страница открыта как file://. Запустите start.bat или python serve.py из папки проекта и откройте адрес из консоли.';
+        }
+      });
+    }
+  </script>
+
+  <script type="module" src="app/js/main.js"></script>
+</body>
+</html>

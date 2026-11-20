@@ -1,0 +1,7 @@
+tools/
+.ultramind/
+defense/
+prompt/sources/
+__pycache__/
+*.pyc
+*.log
