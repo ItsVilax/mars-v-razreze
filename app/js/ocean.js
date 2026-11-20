@@ -21,13 +21,14 @@ export class OceanModule {
     this.lastResult = null;
     this.curve = null;
     this.curveRequested = false;
+    this.curveWanted = false;
     this.spillLevel = null;
     this.fallback = false;
     this.controls = {};
     this._bindDom();
     this._initWorker();
     this._initChart();
-    this.setLevel(CONTROL.level);
+    this.setLevel(CONTROL.level, true);
   }
 
   _bindDom() {
@@ -77,7 +78,7 @@ export class OceanModule {
   _initWorker() {
     if (typeof Worker === 'undefined') { this._enableFallback('Worker недоступен'); return; }
     try {
-      this.worker = new Worker(new URL('./flood-worker.js', import.meta.url));
+      this.worker = new Worker(new URL('./flood-worker.js', import.meta.url), { type: 'module' });
       this.worker.onmessage = (e) => this._onWorkerMessage(e.data);
       this.worker.onerror = (e) => {
         this._enableFallback(e.message || 'ошибка worker');
@@ -115,10 +116,7 @@ export class OceanModule {
       this.workerReady = true;
       this._setStatus('ready');
       this._drainPending();
-      if (!this.curveRequested) {
-        this.curveRequested = true;
-        this.worker.postMessage({ type: 'curve', levels: [...Array.from({ length: 81 }, (_, i) => -6000 + i * 100), CONTROL.level, SPILL_LEVEL] });
-      }
+      if (this.curveWanted && !this.curveRequested) this._requestCurve();
       return;
     }
     if (msg.type === 'floodResult' || msg.type === 'allLowResult') {
@@ -147,8 +145,31 @@ export class OceanModule {
 
   _setStatus(status) {
     if (status === 'ready') {
-      this.controls.chartStatus.textContent = this.curve ? 'Кривая рассчитана.' : 'Считаю кривую уровень — площадь…';
+      this.controls.chartStatus.textContent = this.curve
+        ? 'Кривая рассчитана.'
+        : 'Кривая будет рассчитана при открытии вкладки «Океан».';
     }
+  }
+
+  _requestCurve() {
+    if (this.curveRequested) return;
+    if (this.fallback) { this.curveRequested = true; this._fallbackCurve(); return; }
+    if (!this.worker || !this.workerReady) { this.curveWanted = true; return; }
+    this.curveRequested = true;
+    this.controls.chartStatus.textContent = 'Считаю кривую уровень — площадь…';
+    this.worker.postMessage({
+      type: 'curve',
+      levels: [...Array.from({ length: 81 }, (_, i) => -6000 + i * 100), CONTROL.level, SPILL_LEVEL],
+    });
+  }
+
+  ensureCurve() {
+    this.curveWanted = true;
+    this._requestCurve();
+  }
+
+  ensureLevel() {
+    if (!this.lastResult) this._request(this.level, this.mode);
   }
 
   _drainPending() {
@@ -184,7 +205,10 @@ export class OceanModule {
   _applyResult(result) {
     this.lastResult = result;
     const mask = new Uint8Array(result.mask);
-    this.globe.setWaterMask(mask, result.level);
+    const texture = result.texture
+      ? (result.texture instanceof Uint8Array ? result.texture : new Uint8Array(result.texture))
+      : null;
+    this.globe.setWaterMask(mask, result.level, texture);
     const areaMkm2 = result.areaKm2 / 1e6;
     const startZ = this.data.meta.start.z;
     const method = result.startBelow ? `${formatMeters(result.level - startZ)} м` : 'старт выше h';
@@ -205,7 +229,7 @@ export class OceanModule {
     this._updateNote(result, areaMkm2);
     this.controls.chartStatus.textContent = this.curve
       ? `Кривая рассчитана по всем ${this.curve.levels.length} уровням; зелёная точка — текущий уровень.`
-      : 'Считаю кривую уровень — площадь…';
+      : (this.curveRequested ? 'Считаю кривую уровень — площадь…' : 'Кривая будет рассчитана при открытии вкладки «Океан».');
   }
 
   _updateControlCheck(result, areaMkm2) {
@@ -310,21 +334,14 @@ export class OceanModule {
     this._updateChartMarkers(this.chart.opts.points[0]?.y || 0);
   }
 
-  setLevel(value) {
+  setLevel(value, defer = false) {
     const level = clamp(Math.round(Number(value) || CONTROL.level), -6000, 2000);
     this.level = level;
     this.controls.range.value = level;
     this.controls.num.value = level;
     this.controls.label.textContent = `${formatSigned(level)} м`;
     this._updateChartMarkers(this.lastResult ? this.lastResult.areaKm2 / 1e6 : 0);
-    this._request(level, this.mode);
-    if (!this.fallback && this.workerReady && !this.inFlight) {
-      // request submitted above
-    }
-    if (!this.curveRequested && this.workerReady && !this.fallback) {
-      this.curveRequested = true;
-      this.worker.postMessage({ type: 'curve', levels: [...Array.from({ length: 81 }, (_, i) => -6000 + i * 100), CONTROL.level, SPILL_LEVEL] });
-    }
+    if (!defer) this._request(level, this.mode);
   }
 
   setMode(mode) {
@@ -387,6 +404,7 @@ export class OceanModule {
   }
 
   openChartModal() {
+    this.ensureCurve();
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop ocean-chart-modal';
     modal.innerHTML = `

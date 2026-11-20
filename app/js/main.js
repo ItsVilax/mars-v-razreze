@@ -10,6 +10,7 @@ import {
 } from './utils.js';
 
 const $ = (id) => document.getElementById(id);
+try { performance.mark?.('mars-boot-start'); } catch { /* ignored */ }
 const state = {
   data: null,
   globe: null,
@@ -75,6 +76,10 @@ function setTab(name) {
   }
   const showWater = name === 'ocean';
   state.globe?.setWaterVisible(showWater);
+  if (name === 'ocean') {
+    state.ocean?.ensureLevel?.();
+    state.ocean?.ensureCurve?.();
+  }
   const waterToggle = $('layer-water');
   if (waterToggle) waterToggle.checked = showWater;
   if (name === 'catalog') {
@@ -318,7 +323,9 @@ function openInfo(scrollSources = false) {
 
 async function boot() {
   try {
+    try { performance.mark?.('mars-data-start'); } catch { /* ignored */ }
     const data = await loadAtlasData((pct, status, detail) => setBoot(pct, status, detail));
+    try { performance.mark?.('mars-data-end'); performance.measure?.('mars-data', 'mars-data-start', 'mars-data-end'); } catch { /* ignored */ }
     state.data = data;
     $('app')?.classList.remove('is-hidden');
     if ($('boot-status')) $('boot-status').textContent = 'Собираю сцену…';
@@ -355,6 +362,7 @@ async function boot() {
       },
       onStatus: () => {},
     });
+    try { performance.mark?.('mars-globe-end'); performance.measure?.('mars-globe', 'mars-data-end', 'mars-globe-end'); } catch { /* ignored */ }
 
     state.craterLab = new CraterLab({
       data,
@@ -373,6 +381,19 @@ async function boot() {
 
     state.mobile = new MobileUI({ getState: () => state, setTab, toast });
     state.mobile.init();
+    try { performance.mark?.('mars-modules-end'); performance.measure?.('mars-modules', 'mars-globe-end', 'mars-modules-end'); } catch { /* ignored */ }
+
+    // Pause the WebGL loop while a full-screen modal is open. The globe is not
+    // visible through the backdrop, and blurring/animating it wastes frames.
+    let overlayOpen = false;
+    const syncOverlay = () => {
+      const open = !!document.querySelector('.modal-backdrop');
+      if (open !== overlayOpen) {
+        overlayOpen = open;
+        state.globe?.setOverlayOpen(open);
+      }
+    };
+    new MutationObserver(syncOverlay).observe(document.body, { childList: true, subtree: true });
 
     // expose for verification / debugging in the browser only
     window.__mars = {
@@ -383,12 +404,14 @@ async function boot() {
 
     bindUi();
     setTab('globe');
-    setTimeout(() => {
-      state.globe?._resize();
-      $('boot')?.classList.add('done');
-      setStageCaption();
-      state.booted = true;
-    }, 120);
+    state.globe?._resize();
+    $('boot')?.classList.add('done');
+    setStageCaption();
+    state.booted = true;
+    try {
+      performance.mark?.('mars-ready');
+      performance.measure?.('mars-boot', 'mars-boot-start', 'mars-ready');
+    } catch { /* ignored */ }
   } catch (err) {
     console.error(err);
     showBootError(err);
@@ -456,7 +479,10 @@ function bindUi() {
 
   $('layer-graticule')?.addEventListener('change', (e) => state.globe.setGraticuleVisible(e.target.checked));
   $('layer-points')?.addEventListener('change', (e) => state.globe.setPointsVisible(e.target.checked));
-  $('layer-water')?.addEventListener('change', (e) => state.globe.setWaterVisible(e.target.checked));
+  $('layer-water')?.addEventListener('change', (e) => {
+    state.globe.setWaterVisible(e.target.checked);
+    if (e.target.checked) state.ocean?.ensureLevel?.();
+  });
   const water = $('layer-water');
   if (water) water.checked = !!state.globe?.waterUserVisible;
 

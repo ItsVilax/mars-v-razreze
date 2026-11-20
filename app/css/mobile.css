@@ -125,7 +125,6 @@
     padding: 4px 3px calc(4px + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid rgba(31, 48, 68, .85);
     background: rgba(6, 10, 16, .96);
-    backdrop-filter: blur(18px);
     pointer-events: auto;
   }
   .tabs [data-tab="shore"] { display: none; }
@@ -220,14 +219,13 @@
     padding: 0 9px;
     border: 1px solid var(--line);
     border-radius: 9px;
-    background: rgba(15, 25, 38, .82);
+    background: rgba(15, 25, 38, .9);
     color: var(--text);
     font-size: 11.5px;
     font-weight: 650;
     line-height: 1.1;
     cursor: pointer;
     white-space: nowrap;
-    backdrop-filter: blur(8px);
   }
   .mobile-pill:active { background: var(--panel-3); }
 
@@ -288,9 +286,8 @@
     padding: 4px 2px;
     font-size: 10.5px;
     border-radius: 8px;
-    background: rgba(5, 10, 16, .72);
+    background: rgba(5, 10, 16, .86);
     border-color: rgba(255, 255, 255, .12);
-    backdrop-filter: blur(8px);
   }
   .mobile-globe-actions {
     position: absolute;
@@ -380,8 +377,7 @@
     padding: 2px;
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 9px;
-    background: rgba(5, 10, 16, .82);
-    backdrop-filter: blur(10px);
+    background: rgba(5, 10, 16, .9);
     pointer-events: auto;
   }
   .app[data-tab="ocean"] .mobile-subtabs,
@@ -419,9 +415,8 @@
   .panel[data-panel="ocean"] .stat {
     padding: 5px 7px;
     border-radius: 8px;
-    background: rgba(5, 10, 16, .68);
+    background: rgba(5, 10, 16, .82);
     border-color: rgba(255, 255, 255, .12);
-    backdrop-filter: blur(9px);
   }
   .panel[data-panel="ocean"] .stat span { font-size: 8.5px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .panel[data-panel="ocean"] .stat b { font-size: 13px; }
@@ -435,9 +430,8 @@
     margin: 0;
     padding: 6px 9px;
     border-radius: 10px;
-    background: rgba(5, 10, 16, .8);
+    background: rgba(5, 10, 16, .88);
     border-color: rgba(255, 255, 255, .14);
-    backdrop-filter: blur(10px);
   }
   .panel[data-panel="ocean"] .level-top { font-size: 10.5px; }
   .panel[data-panel="ocean"] .level-top b { font-size: 13px; }
@@ -452,9 +446,8 @@
     width: calc(50% - 10px);
     height: 32px;
     margin: 0;
-    background: rgba(5, 10, 16, .82);
+    background: rgba(5, 10, 16, .9);
     border-color: rgba(255, 255, 255, .12);
-    backdrop-filter: blur(9px);
   }
   .panel[data-panel="ocean"] .segmented button { font-size: 9px; padding: 0 2px; }
   .mobile-ocean-actions {

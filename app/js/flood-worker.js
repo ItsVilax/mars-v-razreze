@@ -1,4 +1,6 @@
 /* MOLA4 connected flood fill. Runs off the main thread. */
+import { buildWaterTexture } from './utils.js';
+
 let rows = 720;
 let cols = 1440;
 let z = null;
@@ -82,22 +84,24 @@ self.onmessage = (event) => {
       const res = bfs(msg.level);
       const out = new Uint8Array(N);
       out.set(scratch);
+      const texture = buildWaterTexture(out, z, msg.level, cols, rows);
       postMessage({
         type: 'floodResult', id: msg.id, level: msg.level,
         cells: res.cells, areaKm2: res.area, startBelow: res.startBelow,
-        hellasReached: res.hellasReached, mask: out.buffer,
-      }, [out.buffer]);
+        hellasReached: res.hellasReached, mask: out.buffer, texture,
+      }, [out.buffer, texture.buffer]);
       return;
     }
     if (msg.type === 'allLow') {
       const res = allLow(msg.level);
       const out = new Uint8Array(N);
       out.set(scratch);
+      const texture = buildWaterTexture(out, z, msg.level, cols, rows);
       postMessage({
         type: 'allLowResult', id: msg.id, level: msg.level,
         cells: res.cells, areaKm2: res.area, startBelow: res.startBelow,
-        hellasReached: res.hellasReached, mask: out.buffer,
-      }, [out.buffer]);
+        hellasReached: res.hellasReached, mask: out.buffer, texture,
+      }, [out.buffer, texture.buffer]);
       return;
     }
     if (msg.type === 'curve') {

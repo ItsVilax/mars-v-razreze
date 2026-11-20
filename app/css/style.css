@@ -627,8 +627,7 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
   padding: 4px 7px 4px 5px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, .15);
-  background: rgba(5, 10, 16, .72);
-  backdrop-filter: blur(6px);
+  background: rgba(5, 10, 16, .88);
   color: #f0f5fb;
   font-size: 10px;
   font-family: var(--mono);
@@ -654,8 +653,7 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 .coords {
   min-width: 190px;
   border: 1px solid rgba(255, 255, 255, .16);
-  background: rgba(5, 10, 16, .78);
-  backdrop-filter: blur(10px);
+  background: rgba(5, 10, 16, .9);
   border-radius: 12px;
   padding: 10px 12px;
   pointer-events: auto;
@@ -669,12 +667,11 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
   width: 33px; height: 33px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, .12);
-  background: rgba(5, 10, 16, .65);
+  background: rgba(5, 10, 16, .85);
   color: var(--muted);
   font-family: var(--mono);
   font-size: 11px;
   cursor: pointer;
-  backdrop-filter: blur(8px);
   transition: .18s;
 }
 .round-btn:hover, .round-btn.active { color: var(--accent-2); border-color: rgba(240, 122, 69, .45); background: rgba(40, 21, 14, .65); }
@@ -686,8 +683,7 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
   padding: 11px 12px 9px;
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: 12px;
-  background: rgba(5, 10, 16, .62);
-  backdrop-filter: blur(10px);
+  background: rgba(5, 10, 16, .86);
 }
 .legend-title { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); font-family: var(--mono); letter-spacing: .05em; text-transform: uppercase; }
 .legend-title span { color: var(--accent-2); }
@@ -709,11 +705,10 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
   font-family: var(--mono);
   font-size: 9px;
   letter-spacing: .02em;
-  background: rgba(5, 10, 16, .5);
+  background: rgba(5, 10, 16, .84);
   border: 1px solid rgba(255, 255, 255, .07);
   padding: 6px 9px;
   border-radius: 99px;
-  backdrop-filter: blur(8px);
 }
 .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); animation: pulse 2.4s ease infinite; }
 @keyframes pulse { 50% { opacity: .35; } }

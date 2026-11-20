@@ -2,6 +2,7 @@ import {
   R_MARS_KM, HEMI_AREA_MKM2, clamp, median, rad,
   parseGrid, parseCSV, buildRowAreas
 } from './utils.js';
+import { dataSignature, readCachedGrids, writeCachedGrids } from './cache.js';
 
 const BASE = 'prompt/';
 const MOLA16_BYTES = 33177600;
@@ -37,35 +38,47 @@ async function fetchText(url) {
   return res.text();
 }
 
-function decodeBigEndianInt16(buffer) {
-  const src = new Uint16Array(buffer);
-  const out = new Int16Array(src.length);
-  for (let i = 0; i < src.length; i++) {
-    const v = src[i];
-    out[i] = ((v & 0xff) << 8) | (v >> 8);
-  }
-  return out;
+function decodeBigEndianValue(v) {
+  return ((((v & 0xff) << 8) | (v >> 8)) << 16) >> 16;
 }
 
-function downsample(grid, srcRows, srcCols, factor) {
-  const rows = srcRows / factor;
-  const cols = srcCols / factor;
-  const out = new Float32Array(rows * cols);
-  const inv = 1 / (factor * factor);
-  let k = 0;
-  for (let r = 0; r < rows; r++) {
-    const sr = r * factor;
-    for (let c = 0; c < cols; c++) {
-      const sc = c * factor;
-      let sum = 0;
-      for (let dr = 0; dr < factor; dr++) {
-        const off = (sr + dr) * srcCols + sc;
-        for (let dc = 0; dc < factor; dc++) sum += grid[off + dc];
+/*
+ * One pass over MOLA16 producing both display grids. The previous version
+ * allocated a full 33 MB Int16 copy, scanned it for min/max and then walked it
+ * twice more for the 8 px/° and 4 px/° reductions. The values are identical:
+ * 4×4 box mean for globe4 and 2×2 rounded means for globe8.
+ */
+export function buildGlobeGrids(buffer) {
+  const srcCols = 5760;
+  const u16 = new Uint16Array(buffer);
+  const globe4 = new Float32Array(720 * 1440);
+  const globe8 = new Int16Array(1440 * 2880);
+  let min = Infinity, max = -Infinity;
+  for (let r = 0; r < 720; r++) {
+    const outRow8 = r * 2;
+    for (let c = 0; c < 1440; c++) {
+      let s4 = 0, s8a = 0, s8b = 0, s8c = 0, s8d = 0;
+      for (let dr = 0; dr < 4; dr++) {
+        let o = (r * 4 + dr) * srcCols + c * 4;
+        for (let dc = 0; dc < 4; dc++, o++) {
+          const z = decodeBigEndianValue(u16[o]);
+          s4 += z;
+          if (z < min) min = z;
+          if (z > max) max = z;
+          if (dr < 2) {
+            if (dc < 2) s8a += z; else s8b += z;
+          } else if (dc < 2) s8c += z; else s8d += z;
+        }
       }
-      out[k++] = sum * inv;
+      globe4[r * 1440 + c] = s4 / 16;
+      const o8 = (outRow8 * 2880) + c * 2;
+      globe8[o8] = Math.round(s8a / 4);
+      globe8[o8 + 1] = Math.round(s8b / 4);
+      globe8[o8 + 2880] = Math.round(s8c / 4);
+      globe8[o8 + 2881] = Math.round(s8d / 4);
     }
   }
-  return out;
+  return { globe4, globe8, min, max };
 }
 
 function gridMinMax(grid) {
@@ -91,11 +104,8 @@ async function sha256(buffer) {
   return null;
 }
 
-async function loadCraterFragment(jsonName, csvName, cratersById) {
-  const [json, buffer] = await Promise.all([
-    fetchText(BASE + jsonName).then(JSON.parse),
-    fetchArrayBuffer(BASE + csvName),
-  ]);
+async function loadCraterFragment(jsonPromise, csvPromise, cratersById) {
+  const [json, buffer] = await Promise.all([jsonPromise, csvPromise]);
   const hash = await sha256(buffer);
   const text = new TextDecoder('utf-8').decode(buffer);
   const grid = parseGrid(text, json.rows, json.columns);
@@ -229,37 +239,68 @@ function makeShore(points) {
 }
 
 export async function loadAtlasData(onProgress) {
-  progress(onProgress, 0.02, 'Читаю MOLA 16 пикселей на градус…', 'megt90n000eb.img · 33.2 МБ');
-  const mola16Buffer = await fetchArrayBuffer(BASE + 'megt90n000eb.img', (got, total) => {
-    progress(onProgress, 0.02 + 0.26 * (total ? got / total : 0), 'Читаю MOLA 16 пикселей на градус…',
-      `${(got / 1048576).toFixed(1)} МБ${total ? ` из ${(total / 1048576).toFixed(1)}` : ''}`);
-  });
-  if (mola16Buffer.byteLength !== MOLA16_BYTES) {
-    throw new Error(`MOLA16: ожидалось ${MOLA16_BYTES} байт, получено ${mola16Buffer.byteLength}`);
-  }
-  progress(onProgress, 0.29, 'Распаковываю высоты MOLA16…', '2880 × 5760 · int16 big-endian');
-  const full16 = decodeBigEndianInt16(mola16Buffer);
-  const mm16 = gridMinMax(full16);
+  const prefetch = (p) => { p.catch(() => {}); return p; };
+  const prefetchText = (url) => prefetch(fetchText(url));
+  const prefetchJson = (url) => prefetch(fetchText(url).then(JSON.parse));
+  const prefetchBuffer = (url) => prefetch(fetchArrayBuffer(url));
 
-  progress(onProgress, 0.34, 'Строю сетку глобуса…', '4 и 8 пикселей на градус');
-  const globe4 = downsample(full16, 2880, 5760, 4);
-  const globe8 = new Int16Array(1440 * 2880);
-  for (let r = 0; r < 1440; r++) {
-    for (let c = 0; c < 2880; c++) {
-      const sr = r * 2, sc = c * 2;
-      const o = sr * 5760 + sc;
-      globe8[r * 2880 + c] = Math.round((full16[o] + full16[o + 1] + full16[o + 5760] + full16[o + 5761]) / 4);
+  // Small files are needed on both the cold and cached paths, so start them
+  // before probing the cache to overlap the signature/IDB work.
+  const cratersText = prefetchText(BASE + 'craters20.csv');
+  const northJson = prefetchJson(BASE + 'crater_north_stokes_mola128.json');
+  const northCsv = prefetchBuffer(BASE + 'crater_north_stokes_mola128.csv');
+  const southJson = prefetchJson(BASE + 'crater_south_horowitz_mola128.json');
+  const southCsv = prefetchBuffer(BASE + 'crater_south_horowitz_mola128.csv');
+  const profileText = prefetchText(BASE + encodeURIComponent('Профиль_Стокса.csv'));
+  const shoreAText = prefetchText(BASE + 'shore_A.csv');
+  const shoreBText = prefetchText(BASE + 'shore_B.csv');
+
+  progress(onProgress, 0.01, 'Проверяю кэш браузера…', 'производные сетки MOLA');
+  const signature = await dataSignature();
+  const cached = signature ? await readCachedGrids(signature) : null;
+  const mola4TextPromise = cached ? null : prefetchText(BASE + 'mola4_topography_m.csv');
+
+  let globe4, globe8, mola4, mm16, mm4;
+  if (cached) {
+    progress(onProgress, 0.08, 'Кэш найден: читаю готовые сетки…', 'MOLA16 · MOLA4 · 4 и 8 px/°');
+    globe4 = cached.globe4;
+    globe8 = cached.globe8;
+    mola4 = cached.mola4;
+    mm16 = cached.meta16;
+    mm4 = cached.meta4;
+  } else {
+    progress(onProgress, 0.02, 'Читаю MOLA 16 пикселей на градус…', 'megt90n000eb.img · 33.2 МБ');
+    const mola16Buffer = await fetchArrayBuffer(BASE + 'megt90n000eb.img', (got, total) => {
+      progress(onProgress, 0.02 + 0.26 * (total ? got / total : 0), 'Читаю MOLA 16 пикселей на градус…',
+        `${(got / 1048576).toFixed(1)} МБ${total ? ` из ${(total / 1048576).toFixed(1)}` : ''}`);
+    });
+    if (mola16Buffer.byteLength !== MOLA16_BYTES) {
+      throw new Error(`MOLA16: ожидалось ${MOLA16_BYTES} байт, получено ${mola16Buffer.byteLength}`);
+    }
+    progress(onProgress, 0.29, 'Распаковываю высоты MOLA16…', '2880 × 5760 · int16 big-endian');
+    const built = buildGlobeGrids(mola16Buffer);
+    globe4 = built.globe4;
+    globe8 = built.globe8;
+    mm16 = { min: built.min, max: built.max };
+
+    progress(onProgress, 0.38, 'Читаю сетку заливки MOLA4…', '720 × 1440 · 4 px/°');
+    const mola4Text = await mola4TextPromise;
+    mola4 = parseGrid(mola4Text, 720, 1440);
+    const m4 = gridMinMax(mola4);
+    mm4 = { min: m4.min, max: m4.max };
+
+    if (signature) {
+      const payload = { globe4, globe8, mola4, meta16: mm16, meta4: mm4 };
+      const save = () => { writeCachedGrids(signature, payload).catch(() => {}); };
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(save, { timeout: 5000 });
+      else setTimeout(save, 2500);
     }
   }
 
-  progress(onProgress, 0.42, 'Читаю сетку заливки MOLA4…', '720 × 1440 · 4 px/°');
-  const mola4Text = await fetchText(BASE + 'mola4_topography_m.csv');
-  const mola4 = parseGrid(mola4Text, 720, 1440);
-  const mm4 = gridMinMax(mola4);
   const rowAreas = buildRowAreas(720);
 
-  progress(onProgress, 0.53, 'Считаю каталог кратеров…', 'craters20.csv');
-  const craterRows = parseCSV(await fetchText(BASE + 'craters20.csv'));
+  progress(onProgress, 0.5, 'Считаю каталог кратеров…', 'craters20.csv');
+  const craterRows = parseCSV(await cratersText);
   const craters = [];
   for (const r of craterRows) {
     const diameter = Number(r.diameter_km);
@@ -275,16 +316,16 @@ export async function loadAtlasData(onProgress) {
   const cratersById = new Map(craters.map((c) => [c.id, c]));
   const groups = catalogGroups(craters);
 
-  progress(onProgress, 0.63, 'Открываю подробные фрагменты кратеров…', '128 пикселей на градус');
+  progress(onProgress, 0.64, 'Открываю подробные фрагменты кратеров…', '128 пикселей на градус');
   const [north, south] = await Promise.all([
-    loadCraterFragment('crater_north_stokes_mola128.json', 'crater_north_stokes_mola128.csv', cratersById),
-    loadCraterFragment('crater_south_horowitz_mola128.json', 'crater_south_horowitz_mola128.csv', cratersById),
+    loadCraterFragment(northJson, northCsv, cratersById),
+    loadCraterFragment(southJson, southCsv, cratersById),
   ]);
 
-  progress(onProgress, 0.72, 'Сверяю профиль Стокса с первым опытом…', 'Профиль_Стокса.csv');
+  progress(onProgress, 0.74, 'Сверяю профиль Стокса с первым опытом…', 'Профиль_Стокса.csv');
   let profileCheck = { equal: null, count: 0, mismatches: 0 };
   try {
-    const profileRows = parseCSV(await fetchText(BASE + encodeURIComponent('Профиль_Стокса.csv')));
+    const profileRows = parseCSV(await profileText);
     const expected = north.grid.slice(north.centerRow * north.cols, (north.centerRow + 1) * north.cols);
     let mismatches = 0;
     for (let i = 0; i < profileRows.length; i++) {
@@ -295,10 +336,10 @@ export async function loadAtlasData(onProgress) {
     profileCheck = { equal: false, count: 0, mismatches: 0, error: String(e.message || e) };
   }
 
-  progress(onProgress, 0.8, 'Читаю береговые профили…', 'Ivanov 2017 / Sholes 2021');
+  progress(onProgress, 0.82, 'Читаю береговые профили…', 'Ivanov 2017 / Sholes 2021');
   const [aRows, bRows] = await Promise.all([
-    fetchText(BASE + 'shore_A.csv').then(parseCSV),
-    fetchText(BASE + 'shore_B.csv').then(parseCSV),
+    shoreAText.then(parseCSV),
+    shoreBText.then(parseCSV),
   ]);
   const shoreA = makeShore(aRows.map((r, i) => ({
     point: Number(r.point) || i + 1,
@@ -331,7 +372,7 @@ export async function loadAtlasData(onProgress) {
   const startRow = 180, startCol = 460; // 1-based 181/461
   const hellasRow = 528, hellasCol = 280; // 42° S, 70° E
 
-  progress(onProgress, 0.88, 'Готовлю профили и измерения…', 'Stokes · Horowitz');
+  progress(onProgress, 0.9, 'Готовлю профили и измерения…', 'Stokes · Horowitz');
   const northProfile = computeProfile(north, north.centerRow);
   const southProfile = computeProfile(south, south.centerRow);
   const northRims = autoRims(north, northProfile);
@@ -339,7 +380,7 @@ export async function loadAtlasData(onProgress) {
   const northMeasure = measureProfile(north, northProfile, northRims);
   const southMeasure = measureProfile(south, southProfile, southRims);
 
-  progress(onProgress, 0.94, 'Собираю контрольные значения…', 'заливка · берег · каталог');
+  progress(onProgress, 0.96, 'Собираю контрольные значения…', 'заливка · берег · каталог');
   const data = {
     meta: {
       mola16: { rows: 2880, cols: 5760, bytes: MOLA16_BYTES, min: mm16.min, max: mm16.max },
@@ -350,8 +391,8 @@ export async function loadAtlasData(onProgress) {
       profileCheck,
       fragmentHashOk: north.hashOk === true && south.hashOk === true,
       fragmentHashChecked: north.hashOk !== null && south.hashOk !== null,
+      fromCache: !!cached,
     },
-    full16,
     globe4,
     globe8,
     mola4,

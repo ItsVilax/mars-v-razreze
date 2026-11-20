@@ -20,6 +20,8 @@ python serve.py
 
 Требования: Python 3.8+ и современный браузер с WebGL (Chrome, Edge, Firefox). Проверено в Chromium/Edge.
 
+Повторные запуски быстрее: исходные данные кэшируются HTTP-кэшем, а производные сетки 4/8 px/° — в IndexedDB. Первый запуск читает 33 МБ MOLA16, последующие используют готовые массивы. В консоли время старта доступно как `performance.getEntriesByName('mars-boot')`.
+
 ## Что внутри
 
 | Раздел | Что делает |
@@ -116,7 +118,7 @@ python serve.py
 - Геология: Tanaka et al. (2014), *Geologic Map of Mars*, USGS Scientific Investigations Map 3292.
 - Three.js — MIT; локальная копия в `vendor/three`.
 
-Исходные файлы в `prompt/` **не изменялись**. Приложение читает их напрямую.
+Файлы, которые читает приложение, в `prompt/` **не изменялись**.
 
 ## Структура
 
@@ -127,6 +129,7 @@ app/css/mobile.css         — фиксированные экраны и мен
 app/js/main.js             — запуск, вкладки, режим защиты
 app/js/mobile.js           — мобильная навигация, меню, компактные режимы
 app/js/data.js             — загрузка и проверка MOLA/CSV/JSON
+app/js/cache.js            — IndexedDB-кэш производных сеток
 app/js/globe.js            — Three.js: глобус, вода, маркеры, плотность
 app/js/crater.js           — локальный 3D-рельеф и профили
 app/js/catalog.js          — каталог и карта плотности

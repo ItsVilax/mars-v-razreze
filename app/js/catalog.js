@@ -18,10 +18,11 @@ export class CatalogModule {
     this.cache = new Map();
     this.mapGeom = null;
     this.densityOn = false;
+    this._globeGroup = null;
     this.selected = null;
     this._bind();
     this._fillTable();
-    this._update();
+    this._updateStats();
   }
 
   _bind() {
@@ -96,7 +97,7 @@ export class CatalogModule {
     }).join('');
   }
 
-  _update() {
+  _updateStats() {
     const g = this.data.groups[this.group];
     const n = document.getElementById('density-north');
     const s = document.getElementById('density-south');
@@ -107,17 +108,26 @@ export class CatalogModule {
     document.querySelectorAll('#catalog-table-body tr').forEach((tr) => {
       tr.classList.toggle('active', tr.dataset.group === this.group);
     });
-    const dg = this._grid();
+  }
+
+  _drawMap(dg) {
     const canvas = document.getElementById('density-map');
-    if (canvas) {
-      this.mapGeom = drawDensityMap(canvas, dg.raw, {
-        maxDensity: dg.maxRaw, points: POINTS, step: dg.step, cols: dg.cols, rows: dg.rows,
-      });
-      const max = document.getElementById('density-max');
-      if (max) max.textContent = `${formatNumber(dg.maxRaw, 0)}`;
+    if (!canvas || !canvas.clientWidth) return;
+    this.mapGeom = drawDensityMap(canvas, dg.raw, {
+      maxDensity: dg.maxRaw, points: POINTS, step: dg.step, cols: dg.cols, rows: dg.rows,
+    });
+    const max = document.getElementById('density-max');
+    if (max) max.textContent = `${formatNumber(dg.maxRaw, 0)}`;
+  }
+
+  _update() {
+    this._updateStats();
+    const dg = this._grid();
+    this._drawMap(dg);
+    if (this.densityOn && this._globeGroup !== this.group) {
+      this.globe.setDensityData(dg.grid, dg.max, dg.step);
+      this._globeGroup = this.group;
     }
-    this.globe.setDensityData(dg.grid, dg.max, dg.step);
-    if (this.densityOn) this.globe.setDensityMode(true);
   }
 
   setDensity(on) {
@@ -126,6 +136,14 @@ export class CatalogModule {
     const layer = document.getElementById('layer-density');
     if (cb) cb.checked = on;
     if (layer) layer.checked = on;
+    if (on) {
+      const dg = this._grid();
+      this._drawMap(dg);
+      if (this._globeGroup !== this.group) {
+        this.globe.setDensityData(dg.grid, dg.max, dg.step);
+        this._globeGroup = this.group;
+      }
+    }
     this.globe.setDensityMode(on);
     window.dispatchEvent(new CustomEvent('mars-density', { detail: { on } }));
   }

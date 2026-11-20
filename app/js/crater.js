@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
-  clamp, formatMeters, formatInt, formatNumber, heightColor,
+  clamp, formatMeters, formatInt, formatNumber, heightColorAt,
   downloadCanvas, downloadText, rad, isMobileLayout
 } from './utils.js';
 import { Chart } from './charts.js';
@@ -38,6 +38,7 @@ class LocalTerrain {
     const positions = new Float32Array(this.info.rows * this.info.cols * 3);
     const colors = new Float32Array(this.info.rows * this.info.cols * 3);
     const color = new THREE.Color();
+    const rgb = new Uint8Array(3);
     let k = 0;
     for (let r = 0; r < this.info.rows; r++) {
       for (let c = 0; c < this.info.cols; c++) {
@@ -45,8 +46,8 @@ class LocalTerrain {
         positions[k * 3] = (c - this.info.centerCol) * this.info.kmPerCol;
         positions[k * 3 + 1] = z / 1000 * this.exaggeration;
         positions[k * 3 + 2] = (r - this.info.centerRow) * this.info.kmPerRow;
-        const [rr, gg, bb] = heightColor(z);
-        color.setRGB(rr / 255, gg / 255, bb / 255, THREE.SRGBColorSpace);
+        heightColorAt(z, rgb, 0);
+        color.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, THREE.SRGBColorSpace);
         colors[k * 3] = color.r; colors[k * 3 + 1] = color.g; colors[k * 3 + 2] = color.b;
         k++;
       }

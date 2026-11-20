@@ -1,7 +1,8 @@
 ﻿import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
-  R_MARS_M, clamp, lerp, rad, deg, heightColor, densityColor,
+  R_MARS_M, clamp, lerp, rad, deg,
+  HEIGHT_LUT, heightLutIndex, densityColorAt, buildWaterTexture,
   latLonToVec3, vec3ToLatLon, bilerpGrid, isMobileLayout
 } from './utils.js';
 
@@ -31,8 +32,12 @@ function makeColorTexture(globe8, lowRes = false) {
   for (let r = 0; r < h; r++) {
     for (let c = 0; c < w; c++) {
       const z = globe8[(r * step) * TEX_W + c * step];
-      const [rr, gg, bb] = heightColor(z);
-      data[k++] = rr; data[k++] = gg; data[k++] = bb; data[k++] = 255;
+      const ci = heightLutIndex(z) * 3;
+      data[k] = HEIGHT_LUT[ci];
+      data[k + 1] = HEIGHT_LUT[ci + 1];
+      data[k + 2] = HEIGHT_LUT[ci + 2];
+      data[k + 3] = 255;
+      k += 4;
     }
   }
   const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -48,11 +53,14 @@ function makeColorTexture(globe8, lowRes = false) {
 }
 
 function makeDensityTexture(grid, max, baseGrid, step = 5) {
-  // 4 px/° output: density colour where craters exist, subdued relief elsewhere.
-  const W = 1440, H = 720;
+  // 2 px/° display overlay: the 5° density grid is smooth already, and the
+  // relief below is subdued, so half resolution is visually identical while
+  // being four times cheaper to build than the old 4 px/° texture.
+  const W = 720, H = 360;
   const data = new Uint8Array(W * H * 4);
   const binCols = Math.round(360 / step);
   const binRows = Math.round(180 / step);
+  const densityRgb = new Uint8Array(3);
   let k = 0;
   for (let r = 0; r < H; r++) {
     const lat = 90 - (r + 0.5) * (180 / H);
@@ -73,21 +81,22 @@ function makeDensityTexture(grid, max, baseGrid, step = 5) {
       const d01 = grid[ry1 * binCols + cx0];
       const d11 = grid[ry1 * binCols + cx1];
       const d = (d00 * (1 - fx) + d10 * fx) * (1 - fy) + (d01 * (1 - fx) + d11 * fx) * fy;
-      const z = baseGrid[(r * 2) * 2880 + c * 2];
-      const [hr, hg, hb] = heightColor(z);
-      let rr, gg, bb;
+      const z = baseGrid[(r * 4) * 2880 + c * 4];
+      const hi = heightLutIndex(z) * 3;
+      const hr = HEIGHT_LUT[hi], hg = HEIGHT_LUT[hi + 1], hb = HEIGHT_LUT[hi + 2];
       if (d > 0) {
-        const [dr, dg, db] = densityColor(Math.sqrt(clamp(d / (max || 1), 0, 1)));
+        densityColorAt(Math.sqrt(clamp(d / (max || 1), 0, 1)), densityRgb, 0);
         const a = 0.70;
-        rr = Math.round(hr * (1 - a) + dr * a);
-        gg = Math.round(hg * (1 - a) + dg * a);
-        bb = Math.round(hb * (1 - a) + db * a);
+        data[k] = Math.round(hr * (1 - a) + densityRgb[0] * a);
+        data[k + 1] = Math.round(hg * (1 - a) + densityRgb[1] * a);
+        data[k + 2] = Math.round(hb * (1 - a) + densityRgb[2] * a);
       } else {
-        rr = Math.round(hr * 0.40);
-        gg = Math.round(hg * 0.40);
-        bb = Math.round(hb * 0.40);
+        data[k] = Math.round(hr * 0.40);
+        data[k + 1] = Math.round(hg * 0.40);
+        data[k + 2] = Math.round(hb * 0.40);
       }
-      data[k++] = rr; data[k++] = gg; data[k++] = bb; data[k++] = 255;
+      data[k + 3] = 255;
+      k += 4;
     }
   }
   const tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -125,7 +134,10 @@ export class MarsGlobe {
     this.isMobile = isMobileLayout();
     this.screenActive = true;
     this.pageVisible = !document.hidden;
+    this.overlayOpen = false;
     this._raf = 0;
+    this._normalsTimer = 0;
+    this._labelRect = { width: 1, height: 1 };
 
     this._initScene();
     this._buildGlobe();
@@ -181,6 +193,11 @@ export class MarsGlobe {
 
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
+    this._pickPoint = new THREE.Vector3();
+    this._pickPoint2 = new THREE.Vector3();
+    this._camDir = new THREE.Vector3();
+    this._labelVec = new THREE.Vector3();
+    this._worldVec = new THREE.Vector3();
   }
 
   _buildGlobe() {
@@ -188,6 +205,8 @@ export class MarsGlobe {
     replaceSphereUV(geo);
     const pos = geo.attributes.position;
     const count = pos.count;
+    this.baseDirs = new Float32Array(pos.array.length);
+    this.baseDirs.set(pos.array);
     const heights = new Float32Array(count);
     const data = this.data;
     for (let i = 0; i < count; i++) {
@@ -198,17 +217,15 @@ export class MarsGlobe {
     }
     this.baseHeights = heights;
     this.geometry = geo;
-    this._applyHeight(this.exaggeration);
+    this._applyHeight(this.exaggeration, true);
 
     this.colorTexture = makeColorTexture(data.globe8, this.isMobile);
-    this.densityTexture = makeDensityTexture(new Float64Array(72 * 36), 1, data.globe8, 5);
-    this.baseMaterial = new THREE.MeshStandardMaterial({
+    this.densityTexture = null;
+    this.baseMaterial = new THREE.MeshLambertMaterial({
       map: this.colorTexture,
-      roughness: 0.97,
-      metalness: 0.0,
       color: 0xffffff,
     });
-    this.densityMaterial = new THREE.MeshBasicMaterial({ map: this.densityTexture });
+    this.densityMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.material = this.baseMaterial;
     this.globeMesh = new THREE.Mesh(geo, this.baseMaterial);
     this.scene.add(this.globeMesh);
@@ -228,26 +245,41 @@ export class MarsGlobe {
       })
     );
     this.scene.add(atmo);
-
-    this.pickables = [this.globeMesh];
   }
 
-  _applyHeight(exag) {
+  _applyHeight(exag, immediateNormals = false) {
     const pos = this.geometry.attributes.position;
+    const arr = pos.array;
+    const dirs = this.baseDirs;
     const heights = this.baseHeights;
-    const v = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i).normalize();
+    for (let i = 0, j = 0; i < heights.length; i++, j += 3) {
       const r = 1 + (heights[i] / R_MARS_M) * exag;
-      pos.setXYZ(i, v.x * r, v.y * r, v.z * r);
+      arr[j] = dirs[j] * r;
+      arr[j + 1] = dirs[j + 1] * r;
+      arr[j + 2] = dirs[j + 2] * r;
     }
     pos.needsUpdate = true;
-    this.geometry.computeVertexNormals();
-    this.geometry.computeBoundingSphere();
+    if (immediateNormals) {
+      this.geometry.computeVertexNormals();
+      this.geometry.computeBoundingSphere();
+    } else {
+      this._scheduleNormals();
+    }
+  }
+
+  _scheduleNormals() {
+    if (this._normalsTimer) return;
+    this._normalsTimer = setTimeout(() => {
+      this._normalsTimer = 0;
+      this.geometry.computeVertexNormals();
+      this.geometry.computeBoundingSphere();
+    }, 120);
   }
 
   _buildWater() {
-    const geo = new THREE.SphereGeometry(1, 720, 360);
+    // The water mask is a 4 px/° texture; a much coarser sphere is enough for
+    // the smooth surface and saves a lot of vertex/fill work.
+    const geo = new THREE.SphereGeometry(1, this.isMobile ? 240 : 360, this.isMobile ? 120 : 180);
     replaceSphereUV(geo);
     this.waterTexture = new THREE.DataTexture(
       new Uint8Array(MASK_W * MASK_H * 4), MASK_W, MASK_H, THREE.RGBAFormat, THREE.UnsignedByteType
@@ -261,29 +293,22 @@ export class MarsGlobe {
     this.waterMaterial = new THREE.ShaderMaterial({
       uniforms: {
         uMask: { value: this.waterTexture },
-        uTexel: { value: new THREE.Vector2(1 / MASK_W, 1 / MASK_H) },
         uOpacity: { value: 0.88 },
       },
       vertexShader: `varying vec2 vUv;
         void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: `
         uniform sampler2D uMask;
-        uniform vec2 uTexel;
         uniform float uOpacity;
         varying vec2 vUv;
         void main(){
           vec4 m = texture2D(uMask, vUv);
           if (m.a < 0.5) discard;
-          float edge = 0.0;
-          edge += 1.0 - texture2D(uMask, vUv + vec2(uTexel.x, 0.0)).a;
-          edge += 1.0 - texture2D(uMask, vUv - vec2(uTexel.x, 0.0)).a;
-          edge += 1.0 - texture2D(uMask, vUv + vec2(0.0, uTexel.y)).a;
-          edge += 1.0 - texture2D(uMask, vUv - vec2(0.0, uTexel.y)).a;
           float depth = m.g;
           vec3 shallow = vec3(0.24, 0.68, 0.84);
           vec3 deep = vec3(0.008, 0.055, 0.25);
           vec3 col = mix(shallow, deep, pow(depth, 0.62));
-          if (edge > 0.05) col = mix(col, vec3(0.72, 0.98, 1.0), 0.9);
+          if (m.b > 0.5) col = mix(col, vec3(0.72, 0.98, 1.0), 0.9);
           gl_FragColor = vec4(col, uOpacity);
         }`,
       transparent: true,
@@ -316,6 +341,7 @@ export class MarsGlobe {
     this.markerLayer = new THREE.Group();
     this.scene.add(this.markerLayer);
     this.markerHitMeshes = [];
+    this._up = new THREE.Vector3(0, 0, 1);
     const defs = this._markerDefinition();
     for (const def of defs) {
       const group = new THREE.Group();
@@ -340,14 +366,21 @@ export class MarsGlobe {
       const el = document.createElement('button');
       el.type = 'button';
       el.className = `globe-label ${def.cls}`;
+      el.style.left = '0';
+      el.style.top = '0';
       el.innerHTML = `<i></i><span>${def.label}</span>`;
       el.addEventListener('click', (e) => { e.stopPropagation(); this.onMarker?.(def.id); });
       this.labelsEl.appendChild(el);
 
-      this.markers.push({ ...def, group, dot, ring, hit, el, visible: true, contextVisible: true });
+      const dir = latLonToVec3(def.lat, def.lon, 1);
+      const dirVec = new THREE.Vector3(dir[0], dir[1], dir[2]);
+      group.quaternion.setFromUnitVectors(this._up, dirVec);
+      this.markers.push({
+        ...def, group, dot, ring, hit, el, visible: true, contextVisible: true,
+        dir, dirVec, surfaceZ: bilerpGrid(this.data.globe4, 720, 1440, def.lat, def.lon),
+      });
     }
     this._updateMarkerPositions();
-    this.pickables.push(...this.markerHitMeshes);
   }
 
   _buildShoreLines() {
@@ -358,54 +391,67 @@ export class MarsGlobe {
     this.shoreLines = [];
     for (const def of defs) {
       const pts = this.data.shore[def.key].points;
-      const positions = [];
-      for (const p of pts) {
-        const r = this._surfaceRadius(p.lat, p.lon, 0.0045);
-        positions.push(...latLonToVec3(p.lat, p.lon, r));
+      const n = pts.length;
+      const dirs = new Float32Array(n * 3);
+      const surfaceZ = new Float32Array(n);
+      const positions = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        const p = pts[i];
+        const d = latLonToVec3(p.lat, p.lon, 1);
+        dirs[i * 3] = d[0]; dirs[i * 3 + 1] = d[1]; dirs[i * 3 + 2] = d[2];
+        surfaceZ[i] = bilerpGrid(this.data.globe4, 720, 1440, p.lat, p.lon);
+        const r = 1 + (surfaceZ[i] / R_MARS_M) * this.exaggeration + 0.0045;
+        positions[i * 3] = d[0] * r; positions[i * 3 + 1] = d[1] * r; positions[i * 3 + 2] = d[2] * r;
       }
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
         color: def.color, transparent: true, opacity: 0.95, depthWrite: false,
       }));
       line.renderOrder = 1;
       this.scene.add(line);
-      this.shoreLines.push({ line, points: pts });
+      this.shoreLines.push({ line, points: pts, dirs, surfaceZ });
     }
   }
 
   _updateMarkerPositions() {
     for (const m of this.markers) {
-      const radius = this._surfaceRadius(m.lat, m.lon, 0.007);
-      const [x, y, z] = latLonToVec3(m.lat, m.lon, radius);
-      m.group.position.set(x, y, z);
-      const dir = new THREE.Vector3(x, y, z).normalize();
-      m.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+      const r = 1 + (m.surfaceZ / R_MARS_M) * this.exaggeration + 0.007;
+      m.group.position.set(m.dir[0] * r, m.dir[1] * r, m.dir[2] * r);
     }
+    this.markerLayer?.updateMatrixWorld(true);
     if (this.shoreLines) {
       for (const entry of this.shoreLines) {
-        const pos = entry.line.geometry.attributes.position;
-        for (let i = 0; i < entry.points.length; i++) {
-          const p = entry.points[i];
-          const r = this._surfaceRadius(p.lat, p.lon, 0.0045);
-          const [x, y, z] = latLonToVec3(p.lat, p.lon, r);
-          pos.setXYZ(i, x, y, z);
+        const arr = entry.line.geometry.attributes.position.array;
+        const dirs = entry.dirs;
+        const z = entry.surfaceZ;
+        for (let i = 0, j = 0; i < z.length; i++, j += 3) {
+          const r = 1 + (z[i] / R_MARS_M) * this.exaggeration + 0.0045;
+          arr[j] = dirs[j] * r;
+          arr[j + 1] = dirs[j + 1] * r;
+          arr[j + 2] = dirs[j + 2] * r;
         }
-        pos.needsUpdate = true;
+        entry.line.geometry.attributes.position.needsUpdate = true;
         entry.line.geometry.computeBoundingSphere();
       }
     }
-    if (this.craterPoints) {
-      const pos = this.craterPoints.geometry.attributes.position;
-      for (let i = 0; i < this.craterMeta.length; i++) {
-        const c = this.craterMeta[i];
-        const r = 1.006 + (bilerpGrid(this.data.globe4, 720, 1440, c.lat, c.lon) / R_MARS_M) * this.exaggeration;
-        const [x, y, z] = latLonToVec3(c.lat, c.lon, r);
-        pos.setXYZ(i, x, y, z);
-      }
-      pos.needsUpdate = true;
-    }
+    if (this.craterPoints) this._updateCraterPoints();
     this._updateWaterRadius();
+  }
+
+  _updateCraterPoints() {
+    const pos = this.craterPoints.geometry.attributes.position;
+    const arr = pos.array;
+    const dirs = this.craterDirs;
+    const z = this.craterBaseZ;
+    for (let i = 0, j = 0; i < z.length; i++, j += 3) {
+      const r = 1.006 + (z[i] / R_MARS_M) * this.exaggeration;
+      arr[j] = dirs[j] * r;
+      arr[j + 1] = dirs[j + 1] * r;
+      arr[j + 2] = dirs[j + 2] * r;
+    }
+    pos.needsUpdate = true;
+    this.craterPoints.geometry.computeBoundingSphere();
   }
 
   _buildCraters() {
@@ -413,13 +459,20 @@ export class MarsGlobe {
     const n = craters.length;
     const pos = new Float32Array(n * 3);
     const col = new Float32Array(n * 3);
+    this.craterDirs = new Float32Array(n * 3);
+    this.craterBaseZ = new Float32Array(n);
     const cN = new THREE.Color(0xffa36b);
     const cS = new THREE.Color(0x6fd8e8);
     this.craterMeta = craters;
     for (let i = 0; i < n; i++) {
       const c = craters[i];
-      const [x, y, z] = latLonToVec3(c.lat, c.lon, 1.006);
-      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      const [x, y, z] = latLonToVec3(c.lat, c.lon, 1);
+      this.craterDirs[i * 3] = x;
+      this.craterDirs[i * 3 + 1] = y;
+      this.craterDirs[i * 3 + 2] = z;
+      this.craterBaseZ[i] = bilerpGrid(this.data.globe4, 720, 1440, c.lat, c.lon);
+      const r = 1.006;
+      pos[i * 3] = x * r; pos[i * 3 + 1] = y * r; pos[i * 3 + 2] = z * r;
       const color = c.lat >= 0 ? cN : cS;
       col[i * 3] = color.r; col[i * 3 + 1] = color.g; col[i * 3 + 2] = color.b;
     }
@@ -530,16 +583,40 @@ export class MarsGlobe {
     const y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this.pointer.set(x, y);
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects(this.pickables, false);
-    for (const hit of hits) {
-      if (hit.object.userData.markerId) return { marker: hit.object.userData.markerId };
+
+    // Marker hit-spheres only; the globe itself is intersected analytically.
+    const markerHits = this.raycaster.intersectObjects(this.markerHitMeshes, false);
+    if (markerHits.length) return { marker: markerHits[0].object.userData.markerId };
+
+    const ray = this.raycaster.ray;
+    const maxR = 1 + (21000 / R_MARS_M) * this.exaggeration + 0.01;
+    const p = this._intersectSphere(ray, maxR, this._pickPoint);
+    if (!p) return null;
+    let { lat, lon } = vec3ToLatLon(p.x, p.y, p.z);
+    // Three fixed-point refinements land on the displaced surface; near the
+    // limb the residual is still sub-pixel.
+    for (let i = 0; i < 3; i++) {
+      const r = this._surfaceRadius(lat, lon);
+      const q = this._intersectSphere(ray, r, this._pickPoint2);
+      if (!q) return null;
+      const ll = vec3ToLatLon(q.x, q.y, q.z);
+      lat = ll.lat; lon = ll.lon;
     }
-    const globeHit = hits.find((h) => h.object === this.globeMesh);
-    if (!globeHit) return null;
-    const p = globeHit.point;
-    const { lat, lon } = vec3ToLatLon(p.x, p.y, p.z);
     const z = bilerpGrid(this.data.mola4, 720, 1440, lat, lon);
     return { lat, lon, z };
+  }
+
+  _intersectSphere(ray, radius, out) {
+    const ox = ray.origin.x, oy = ray.origin.y, oz = ray.origin.z;
+    const dx = ray.direction.x, dy = ray.direction.y, dz = ray.direction.z;
+    const b = ox * dx + oy * dy + oz * dz;
+    const c = ox * ox + oy * oy + oz * oz - radius * radius;
+    const disc = b * b - c;
+    if (disc < 0) return null;
+    const t = -b - Math.sqrt(disc);
+    if (t < 0) return null;
+    out.set(ox + dx * t, oy + dy * t, oz + dz * t);
+    return out;
   }
 
   _resize() {
@@ -550,10 +627,12 @@ export class MarsGlobe {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    this._labelRect.width = w;
+    this._labelRect.height = h;
   }
 
   _syncLoop() {
-    const shouldRun = this.screenActive && this.pageVisible;
+    const shouldRun = this.screenActive && this.pageVisible && !this.overlayOpen;
     if (shouldRun && !this._raf) {
       this._last = performance.now();
       this._raf = requestAnimationFrame(this._animate);
@@ -573,6 +652,21 @@ export class MarsGlobe {
     this._syncLoop();
   }
 
+  setOverlayOpen(on) {
+    this.overlayOpen = !!on;
+    if (on && this.flight) this._finishFlight();
+    this._syncLoop();
+  }
+
+  _finishFlight() {
+    const f = this.flight;
+    if (!f) return;
+    this.camera.position.copy(f.targetDir).multiplyScalar(f.targetDist);
+    this.camera.lookAt(0, 0, 0);
+    this.flight = null;
+    this.controls.enabled = true;
+  }
+
   setLabelContext(tab) {
     if (!this.isMobile) {
       for (const m of this.markers) m.contextVisible = true;
@@ -590,7 +684,7 @@ export class MarsGlobe {
   }
 
   _animate(now) {
-    if (!this.screenActive || !this.pageVisible) {
+    if (!this.screenActive || !this.pageVisible || this.overlayOpen) {
       this._raf = 0;
       return;
     }
@@ -616,12 +710,13 @@ export class MarsGlobe {
   }
 
   _updateLabels() {
-    const rect = this.canvas.getBoundingClientRect();
-    const cam = this.camera.position.clone().normalize();
-    const v = new THREE.Vector3();
+    const rect = this._labelRect;
+    const cam = this._camDir.copy(this.camera.position).normalize();
+    const v = this._labelVec;
+    const world = this._worldVec;
     for (const m of this.markers) {
       v.copy(m.group.position).project(this.camera);
-      const world = m.group.position.clone().normalize();
+      world.copy(m.group.position).normalize();
       const front = world.dot(cam) > 0.02;
       const inView = v.z < 1 && v.x > -1.08 && v.x < 1.08 && v.y > -1.08 && v.y < 1.08;
       const sx = (v.x * 0.5 + 0.5) * rect.width;
@@ -631,8 +726,7 @@ export class MarsGlobe {
       const visible = front && inView && safe && m.contextVisible !== false;
       m.el.classList.toggle('visible', visible);
       if (visible) {
-        m.el.style.left = `${sx}px`;
-        m.el.style.top = `${sy}px`;
+        m.el.style.transform = `translate3d(${sx}px, ${sy}px, 0) translate(-50%, -50%)`;
       }
     }
   }
@@ -660,30 +754,19 @@ export class MarsGlobe {
     this._updateMarkerPositions();
   }
 
-  setWaterMask(mask, level) {
+  setWaterMask(mask, level, texture = null) {
+    if (!mask || mask.length !== MASK_W * MASK_H) return;
     this.waterMask = mask;
     this.waterLevel = level;
     const image = this.waterTexture.image;
-    if (!image.data || image.data.length !== MASK_W * MASK_H * 4) {
-      image.data = new Uint8Array(MASK_W * MASK_H * 4);
-    }
-    const out = image.data;
-    const z = this.data.mola4;
-    for (let i = 0; i < MASK_W * MASK_H; i++) {
-      if (mask[i]) {
-        const depth = clamp((level - z[i]) / 6000, 0, 1);
-        out[i * 4] = 255;
-        out[i * 4 + 1] = Math.round(depth * 255);
-        out[i * 4 + 2] = 255;
-        out[i * 4 + 3] = 255;
-      } else {
-        out[i * 4] = 0; out[i * 4 + 1] = 0; out[i * 4 + 2] = 0; out[i * 4 + 3] = 0;
-      }
+    if (texture && texture.length === MASK_W * MASK_H * 4) {
+      image.data = texture;
+    } else {
+      image.data = buildWaterTexture(mask, this.data.mola4, level, MASK_W, MASK_H);
     }
     this.waterTexture.needsUpdate = true;
     this._updateWaterRadius();
     this.waterMesh.visible = this.waterUserVisible && !this.densityMode;
-    this._updateMarkerPositions();
   }
 
   _updateWaterRadius() {

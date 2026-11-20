@@ -135,6 +135,112 @@ export function densityColor(t) {
   return stops[stops.length - 1][1];
 }
 
+// Colour lookups for the hot pixel/vertex loops. The original functions
+// return a fresh array for every value, which creates millions of short-lived
+// allocations while building the globe texture (a noticeable GC source).
+export const HEIGHT_LUT_MIN = -8200;
+export const HEIGHT_LUT_MAX = 12000;
+export const HEIGHT_LUT_SIZE = 8192;
+const HEIGHT_LUT_SCALE = (HEIGHT_LUT_SIZE - 1) / (HEIGHT_LUT_MAX - HEIGHT_LUT_MIN);
+
+function buildHeightLut() {
+  const out = new Uint8Array(HEIGHT_LUT_SIZE * 3);
+  const step = (HEIGHT_LUT_MAX - HEIGHT_LUT_MIN) / (HEIGHT_LUT_SIZE - 1);
+  for (let i = 0; i < HEIGHT_LUT_SIZE; i++) {
+    const [r, g, b] = heightColor(HEIGHT_LUT_MIN + i * step);
+    out[i * 3] = r;
+    out[i * 3 + 1] = g;
+    out[i * 3 + 2] = b;
+  }
+  return out;
+}
+
+export const HEIGHT_LUT = buildHeightLut();
+
+export function heightLutIndex(z) {
+  if (z <= HEIGHT_LUT_MIN) return 0;
+  if (z >= HEIGHT_LUT_MAX) return HEIGHT_LUT_SIZE - 1;
+  const i = Math.round((z - HEIGHT_LUT_MIN) * HEIGHT_LUT_SCALE);
+  return i < 0 ? 0 : i >= HEIGHT_LUT_SIZE ? HEIGHT_LUT_SIZE - 1 : i;
+}
+
+export function heightColorAt(z, out, offset = 0) {
+  if (!Number.isFinite(z)) {
+    out[offset] = 100; out[offset + 1] = 100; out[offset + 2] = 100;
+    return;
+  }
+  const i = heightLutIndex(z) * 3;
+  out[offset] = HEIGHT_LUT[i];
+  out[offset + 1] = HEIGHT_LUT[i + 1];
+  out[offset + 2] = HEIGHT_LUT[i + 2];
+}
+
+export const DENSITY_LUT_SIZE = 512;
+
+function buildDensityLut() {
+  const out = new Uint8Array(DENSITY_LUT_SIZE * 3);
+  for (let i = 0; i < DENSITY_LUT_SIZE; i++) {
+    const [r, g, b] = densityColor(i / (DENSITY_LUT_SIZE - 1));
+    out[i * 3] = r;
+    out[i * 3 + 1] = g;
+    out[i * 3 + 2] = b;
+  }
+  return out;
+}
+
+export const DENSITY_LUT = buildDensityLut();
+
+export function densityColorAt(t, out, offset = 0) {
+  const i = Math.round(clamp(t, 0, 1) * (DENSITY_LUT_SIZE - 1)) * 3;
+  out[offset] = DENSITY_LUT[i];
+  out[offset + 1] = DENSITY_LUT[i + 1];
+  out[offset + 2] = DENSITY_LUT[i + 2];
+}
+
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+
+/*
+ * RGBA water mask for the globe shader: red = water, green = depth,
+ * blue = shoreline (precomputed here so the fragment shader needs one tap).
+ * Lives in utils so both the flood worker and the main-thread fallback use it.
+ */
+export function buildWaterTexture(mask, z, level, width = 1440, height = 720) {
+  const out = new Uint8Array(width * height * 4);
+  if (!mask || mask.length !== width * height) return out;
+  if (LITTLE_ENDIAN) {
+    const out32 = new Uint32Array(out.buffer);
+    for (let r = 0, i = 0; r < height; r++) {
+      for (let c = 0; c < width; c++, i++) {
+        if (!mask[i]) { out32[i] = 0; continue; }
+        const left = c === 0 ? i + width - 1 : i - 1;
+        const right = c === width - 1 ? i - width + 1 : i + 1;
+        const edge = !mask[left] || !mask[right] ||
+          r === 0 || !mask[i - width] ||
+          r === height - 1 || !mask[i + width];
+        const depth = (clamp((level - z[i]) / 6000, 0, 1) * 255) | 0;
+        out32[i] = 0xff000000 | (depth << 8) | 255 | (edge ? 0x00ff0000 : 0);
+      }
+    }
+    return out;
+  }
+  for (let r = 0, i = 0; r < height; r++) {
+    for (let c = 0; c < width; c++, i++) {
+      const j = i * 4;
+      if (!mask[i]) { out[j] = 0; out[j + 1] = 0; out[j + 2] = 0; out[j + 3] = 0; continue; }
+      const left = c === 0 ? i + width - 1 : i - 1;
+      const right = c === width - 1 ? i - width + 1 : i + 1;
+      const edge = !mask[left] || !mask[right] ||
+        r === 0 || !mask[i - width] ||
+        r === height - 1 || !mask[i + width];
+      out[j] = 255;
+      out[j + 1] = (clamp((level - z[i]) / 6000, 0, 1) * 255) | 0;
+      out[j + 2] = edge ? 255 : 0;
+      out[j + 3] = 255;
+    }
+  }
+  return out;
+}
+
 export function parseGrid(text, rows, cols) {
   const out = new Int16Array(rows * cols);
   let idx = 0, num = 0, sign = 1, inNum = false;
